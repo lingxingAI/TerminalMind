@@ -17,8 +17,12 @@ export function TabBar(): React.ReactElement {
   const handleShellSelected = useCallback(
     async (shell: ShellInfo) => {
       setShellPickerOpen(false);
-      const session = await window.api.terminal.create({ shell: shell.path });
-      addTab(session.id, session.title);
+      try {
+        const session = await window.api.terminal.create({ shell: shell.path });
+        addTab(session.id, session.title);
+      } catch (err) {
+        console.error('Failed to create terminal:', err);
+      }
     },
     [addTab],
   );

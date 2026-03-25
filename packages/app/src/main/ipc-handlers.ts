@@ -55,38 +55,43 @@ export function registerIpcHandlers(
   });
 
   ipcMain.handle(IpcChannels.TERMINAL_CREATE, async (_event, options: TerminalCreateOptions) => {
-    const session = await terminalService.create(options);
+    try {
+      const session = await terminalService.create(options);
 
-    let buffer = '';
-    let flushScheduled = false;
+      let buffer = '';
+      let flushScheduled = false;
 
-    session.onData((data) => {
-      buffer += data;
-      if (!flushScheduled) {
-        flushScheduled = true;
-        setImmediate(() => {
-          if (!mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(IpcEventChannels.PTY_DATA, {
-              sessionId: session.id,
-              data: buffer,
-            });
-          }
-          buffer = '';
-          flushScheduled = false;
-        });
-      }
-    });
+      session.onData((data) => {
+        buffer += data;
+        if (!flushScheduled) {
+          flushScheduled = true;
+          setImmediate(() => {
+            if (!mainWindow.isDestroyed()) {
+              mainWindow.webContents.send(IpcEventChannels.PTY_DATA, {
+                sessionId: session.id,
+                data: buffer,
+              });
+            }
+            buffer = '';
+            flushScheduled = false;
+          });
+        }
+      });
 
-    session.onExit((e) => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(IpcEventChannels.EVENT_BROADCAST, {
-          type: 'terminal.exited',
-          payload: { sessionId: session.id, exitCode: e.exitCode },
-        });
-      }
-    });
+      session.onExit((e) => {
+        if (!mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IpcEventChannels.EVENT_BROADCAST, {
+            type: 'terminal.exited',
+            payload: { sessionId: session.id, exitCode: e.exitCode },
+          });
+        }
+      });
 
-    return toSessionInfo(session);
+      return toSessionInfo(session);
+    } catch (err) {
+      console.error('Failed to create terminal session:', err);
+      throw err;
+    }
   });
 
   ipcMain.handle(IpcChannels.TERMINAL_DESTROY, async (_event, args: { sessionId: string }) => {

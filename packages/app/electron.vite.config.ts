@@ -7,7 +7,16 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [
+      externalizeDepsPlugin({
+        exclude: [
+          '@terminalmind/core',
+          '@terminalmind/services',
+          '@terminalmind/api',
+          '@terminalmind/ext-terminal',
+        ],
+      }),
+    ],
     build: {
       rollupOptions: {
         external: ['node-pty'],
@@ -15,7 +24,11 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [
+      externalizeDepsPlugin({
+        exclude: ['@terminalmind/core', '@terminalmind/api'],
+      }),
+    ],
   },
   renderer: {
     resolve: {

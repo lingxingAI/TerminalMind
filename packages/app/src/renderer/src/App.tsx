@@ -20,11 +20,19 @@ export function App(): React.ReactElement {
 
   useGlobalKeybindings({ onCommandPalette: openCommandPalette });
 
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     if (tabs.length === 0) {
-      window.api.terminal.create({}).then((session) => {
-        addTab(session.id, session.title);
-      });
+      window.api.terminal
+        .create({})
+        .then((session) => {
+          addTab(session.id, session.title);
+        })
+        .catch((err: Error) => {
+          console.error('Failed to create initial terminal:', err);
+          setError(err.message ?? 'Failed to create terminal. Is node-pty built correctly?');
+        });
     }
   }, []);
 
@@ -37,13 +45,23 @@ export function App(): React.ReactElement {
           <Toolbar onCommandPalette={openCommandPalette} />
           <TabBar />
           <div className="terminal-area">
-            {tabs.map((tab) => (
-              <TerminalView
-                key={tab.terminalSessionId}
-                sessionId={tab.terminalSessionId}
-                visible={tab.isActive}
-              />
-            ))}
+            {error ? (
+              <div className="error-banner">
+                <p style={{ fontWeight: 600 }}>Terminal Error</p>
+                <p>{error}</p>
+                <p style={{ color: 'var(--text-dim)', fontSize: 12, marginTop: 8 }}>
+                  Run <code>npx @electron/rebuild -w node-pty</code> to rebuild native modules.
+                </p>
+              </div>
+            ) : (
+              tabs.map((tab) => (
+                <TerminalView
+                  key={tab.terminalSessionId}
+                  sessionId={tab.terminalSessionId}
+                  visible={tab.isActive}
+                />
+              ))
+            )}
           </div>
           <PanelArea />
           <StatusBar />
