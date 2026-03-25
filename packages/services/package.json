@@ -13,9 +13,12 @@
   "dependencies": {
     "@terminalmind/api": "workspace:*",
     "@terminalmind/core": "workspace:*",
-    "node-pty": "^1.0.0"
+    "keytar": "^7.9.0",
+    "node-pty": "^1.0.0",
+    "ssh2": "^1.16.0"
   },
   "devDependencies": {
+    "@types/ssh2": "^1.15.0",
     "typescript": "^5.6.0"
   }
 }

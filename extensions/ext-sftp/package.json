@@ -1,0 +1,32 @@
+{
+  "name": "@terminalmind/ext-sftp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "terminalmind": {
+    "entry": "./src/index.ts",
+    "activationEvents": ["onCommand:sftp.*", "onView:sftp-browser"],
+    "contributions": {
+      "commands": [
+        { "id": "sftp.open", "title": "SFTP: Open File Browser" },
+        { "id": "sftp.upload", "title": "SFTP: Upload File" },
+        { "id": "sftp.download", "title": "SFTP: Download File" }
+      ],
+      "views": {
+        "sidebar": [{ "id": "sftp-browser", "name": "File Browser" }]
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@terminalmind/api": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

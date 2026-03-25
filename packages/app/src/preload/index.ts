@@ -39,6 +39,95 @@ const api: PreloadAPI = {
     get: (key, defaultValue) => ipcRenderer.invoke(IpcChannels.CONFIG_GET, { key, defaultValue }),
     set: (key, value) => ipcRenderer.invoke(IpcChannels.CONFIG_SET, { key, value }),
   },
+  ssh: {
+    connect: (options) => ipcRenderer.invoke(IpcChannels.SSH_CONNECT, options),
+    disconnect: (sessionId) => ipcRenderer.invoke(IpcChannels.SSH_DISCONNECT, { sessionId }),
+    listSessions: () => ipcRenderer.invoke(IpcChannels.SSH_LIST_SESSIONS),
+    getSession: (sessionId) => ipcRenderer.invoke(IpcChannels.SSH_GET_SESSION, { sessionId }),
+    exec: (sessionId, command) => ipcRenderer.invoke(IpcChannels.SSH_EXEC, { sessionId, command }),
+    forwardPort: (options) => ipcRenderer.invoke(IpcChannels.SSH_FORWARD_PORT, options),
+    closeForward: (sessionId, forwardId) =>
+      ipcRenderer.invoke(IpcChannels.SSH_CLOSE_FORWARD, { sessionId, forwardId }),
+    listForwards: (sessionId) => ipcRenderer.invoke(IpcChannels.SSH_LIST_FORWARDS, { sessionId }),
+    hostKeyVerify: (request) => ipcRenderer.invoke(IpcChannels.SSH_HOST_KEY_VERIFY, request),
+    hostKeyAccept: (request) => ipcRenderer.invoke(IpcChannels.SSH_HOST_KEY_ACCEPT, request),
+    onStatusChange: (callback) => {
+      const handler = (_event: unknown, payload: unknown) => {
+        callback(payload as Parameters<typeof callback>[0]);
+      };
+      ipcRenderer.on(IpcEventChannels.SSH_STATUS_CHANGE, handler);
+      return () => {
+        ipcRenderer.removeListener(IpcEventChannels.SSH_STATUS_CHANGE, handler);
+      };
+    },
+    onHostKeyPrompt: (callback) => {
+      const handler = (_event: unknown, payload: unknown) => {
+        callback(payload as Parameters<typeof callback>[0]);
+      };
+      ipcRenderer.on(IpcEventChannels.SSH_HOST_KEY_PROMPT, handler);
+      return () => {
+        ipcRenderer.removeListener(IpcEventChannels.SSH_HOST_KEY_PROMPT, handler);
+      };
+    },
+    onPasswordPrompt: (callback) => {
+      const handler = (_event: unknown, payload: unknown) => {
+        callback(payload as Parameters<typeof callback>[0]);
+      };
+      ipcRenderer.on(IpcEventChannels.SSH_PASSWORD_PROMPT, handler);
+      return () => {
+        ipcRenderer.removeListener(IpcEventChannels.SSH_PASSWORD_PROMPT, handler);
+      };
+    },
+  },
+  sftp: {
+    list: (request) => ipcRenderer.invoke(IpcChannels.SFTP_LIST, request),
+    stat: (request) => ipcRenderer.invoke(IpcChannels.SFTP_STAT, request),
+    mkdir: (request) => ipcRenderer.invoke(IpcChannels.SFTP_MKDIR, request),
+    rmdir: (request) => ipcRenderer.invoke(IpcChannels.SFTP_RMDIR, request),
+    unlink: (request) => ipcRenderer.invoke(IpcChannels.SFTP_UNLINK, request),
+    rename: (request) => ipcRenderer.invoke(IpcChannels.SFTP_RENAME, request),
+    upload: (options) => ipcRenderer.invoke(IpcChannels.SFTP_UPLOAD, options),
+    download: (options) => ipcRenderer.invoke(IpcChannels.SFTP_DOWNLOAD, options),
+    cancelTransfer: (transferId) => ipcRenderer.invoke(IpcChannels.SFTP_CANCEL_TRANSFER, { transferId }),
+    retryTransfer: (transferId) => ipcRenderer.invoke(IpcChannels.SFTP_RETRY_TRANSFER, { transferId }),
+    listTransfers: () => ipcRenderer.invoke(IpcChannels.SFTP_LIST_TRANSFERS),
+    clearCompleted: () => ipcRenderer.invoke(IpcChannels.SFTP_CLEAR_COMPLETED),
+    onTransferProgress: (callback) => {
+      const handler = (_event: unknown, payload: unknown) => {
+        callback(payload as Parameters<typeof callback>[0]);
+      };
+      ipcRenderer.on(IpcEventChannels.SFTP_TRANSFER_PROGRESS, handler);
+      return () => {
+        ipcRenderer.removeListener(IpcEventChannels.SFTP_TRANSFER_PROGRESS, handler);
+      };
+    },
+    onTransferComplete: (callback) => {
+      const handler = (_event: unknown, payload: unknown) => {
+        callback(payload as Parameters<typeof callback>[0]);
+      };
+      ipcRenderer.on(IpcEventChannels.SFTP_TRANSFER_COMPLETE, handler);
+      return () => {
+        ipcRenderer.removeListener(IpcEventChannels.SFTP_TRANSFER_COMPLETE, handler);
+      };
+    },
+  },
+  connections: {
+    list: () => ipcRenderer.invoke(IpcChannels.CONNECTIONS_LIST),
+    get: (profileId) => ipcRenderer.invoke(IpcChannels.CONNECTIONS_GET, { profileId }),
+    save: (profile) => ipcRenderer.invoke(IpcChannels.CONNECTIONS_SAVE, profile),
+    remove: (profileId) => ipcRenderer.invoke(IpcChannels.CONNECTIONS_REMOVE, { profileId }),
+    importData: (data) => ipcRenderer.invoke(IpcChannels.CONNECTIONS_IMPORT, { data }),
+    exportData: () => ipcRenderer.invoke(IpcChannels.CONNECTIONS_EXPORT),
+    onChanged: (callback) => {
+      const handler = (_event: unknown, payload: unknown) => {
+        callback(payload as Parameters<typeof callback>[0]);
+      };
+      ipcRenderer.on(IpcEventChannels.CONNECTION_CHANGED, handler);
+      return () => {
+        ipcRenderer.removeListener(IpcEventChannels.CONNECTION_CHANGED, handler);
+      };
+    },
+  },
   events: {
     onEvent: <T extends EventType>(type: T, callback: (payload: EventPayloadMap[T]) => void) => {
       const handler = (_event: unknown, payload: { type: string; payload: unknown }) => {

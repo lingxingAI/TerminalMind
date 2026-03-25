@@ -7,7 +7,17 @@ export type EventType =
   | 'terminal.exited'
   | 'extension.activated'
   | 'extension.deactivated'
-  | 'command.registered';
+  | 'command.registered'
+  | 'ssh.connecting'
+  | 'ssh.connected'
+  | 'ssh.disconnected'
+  | 'ssh.error'
+  | 'ssh.hostKeyNew'
+  | 'ssh.hostKeyChanged'
+  | 'sftp.transferStart'
+  | 'sftp.transferProgress'
+  | 'sftp.transferComplete'
+  | 'connection.changed';
 
 export interface EventPayloadMap {
   'terminal.created': { readonly sessionId: string; readonly title: string };
@@ -17,6 +27,32 @@ export interface EventPayloadMap {
   'extension.activated': { readonly extensionId: string };
   'extension.deactivated': { readonly extensionId: string };
   'command.registered': { readonly commandId: string };
+  'ssh.connecting': { readonly sessionId: string; readonly host: string };
+  'ssh.connected': { readonly sessionId: string; readonly host: string };
+  'ssh.disconnected': { readonly sessionId: string; readonly host: string; readonly reason?: string };
+  'ssh.error': { readonly sessionId: string; readonly host: string; readonly error: string };
+  'ssh.hostKeyNew': { readonly host: string; readonly port: number; readonly fingerprint: string };
+  'ssh.hostKeyChanged': {
+    readonly host: string;
+    readonly port: number;
+    readonly oldFingerprint: string;
+    readonly newFingerprint: string;
+  };
+  'sftp.transferStart': {
+    readonly transferId: string;
+    readonly direction: 'upload' | 'download';
+    readonly filename: string;
+  };
+  'sftp.transferProgress': {
+    readonly transferId: string;
+    readonly filename: string;
+    readonly direction: 'upload' | 'download';
+    readonly bytesTransferred: number;
+    readonly totalBytes: number;
+    readonly percentage: number;
+  };
+  'sftp.transferComplete': { readonly transferId: string; readonly success: boolean; readonly error?: string };
+  'connection.changed': { readonly type: 'added' | 'updated' | 'removed'; readonly profileId: string };
 }
 
 export interface IEventBus {

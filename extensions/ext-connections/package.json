@@ -1,0 +1,37 @@
+{
+  "name": "@terminalmind/ext-connections",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "terminalmind": {
+    "entry": "./src/index.ts",
+    "activationEvents": ["onCommand:connections.*", "onView:connections-tree"],
+    "contributions": {
+      "commands": [
+        { "id": "connections.create", "title": "Connections: New Connection" },
+        { "id": "connections.edit", "title": "Connections: Edit Connection" },
+        { "id": "connections.delete", "title": "Connections: Delete Connection" },
+        { "id": "connections.search", "title": "Connections: Search" },
+        { "id": "connections.import", "title": "Connections: Import JSON" },
+        { "id": "connections.export", "title": "Connections: Export JSON" }
+      ],
+      "views": {
+        "sidebar": [{ "id": "connections-tree", "name": "Connections" }]
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@terminalmind/api": "workspace:*"
+  },
+  "devDependencies": {
+    "@terminalmind/core": "workspace:*",
+    "@terminalmind/services": "workspace:*",
+    "typescript": "^5.6.0"
+  }
+}

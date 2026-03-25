@@ -1,0 +1,33 @@
+{
+  "name": "@terminalmind/ext-ssh",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "terminalmind": {
+    "entry": "./src/index.ts",
+    "activationEvents": ["onCommand:ssh.*", "onView:ssh-connections"],
+    "contributions": {
+      "commands": [
+        { "id": "ssh.connect", "title": "SSH: Connect to Server" },
+        { "id": "ssh.disconnect", "title": "SSH: Disconnect" },
+        { "id": "ssh.quick-connect", "title": "SSH: Quick Connect" },
+        { "id": "ssh.forward-port", "title": "SSH: Forward Port" }
+      ],
+      "views": {
+        "sidebar": [{ "id": "ssh-sessions", "name": "SSH Sessions" }]
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@terminalmind/api": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
