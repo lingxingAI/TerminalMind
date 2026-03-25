@@ -32,6 +32,7 @@ export const IpcChannels = {
   SFTP_RETRY_TRANSFER: 'sftp:retryTransfer',
   SFTP_LIST_TRANSFERS: 'sftp:listTransfers',
   SFTP_CLEAR_COMPLETED: 'sftp:clearCompleted',
+  LOCAL_READ_DIRECTORY: 'local:readDirectory',
   CONNECTIONS_LIST: 'connections:list',
   CONNECTIONS_GET: 'connections:get',
   CONNECTIONS_SAVE: 'connections:save',

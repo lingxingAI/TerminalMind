@@ -13,6 +13,7 @@ export interface TerminalSession {
   readonly createdAt: number;
   write(data: string): void;
   resize(cols: number, rows: number): void;
+  kill(): void;
   readonly onData: Event<string>;
   readonly onExit: Event<{ readonly exitCode: number }>;
 }

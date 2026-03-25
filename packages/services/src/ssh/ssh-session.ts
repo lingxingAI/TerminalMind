@@ -176,6 +176,12 @@ class SSHTerminalSession implements TerminalSession {
     }
   }
 
+  kill(): void {
+    if (this._status === 'running') {
+      this.channel.end();
+    }
+  }
+
   resize(cols: number, rows: number): void {
     if (this._status === 'running') {
       const widthPx = Math.max(cols * 8, 1);

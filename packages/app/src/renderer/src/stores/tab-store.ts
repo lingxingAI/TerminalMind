@@ -7,11 +7,14 @@ export interface TabState {
   readonly isActive: boolean;
   readonly icon: string;
   readonly iconColor: string;
+  readonly connectionType: 'local' | 'ssh';
+  readonly sshSessionId?: string;
 }
 
 interface TabStoreState {
   tabs: TabState[];
   addTab: (sessionId: string, title: string) => string;
+  addSSHTab: (sessionId: string, sshSessionId: string, title: string) => string;
   removeTab: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
   updateTitle: (tabId: string, title: string) => void;
@@ -34,6 +37,27 @@ export const useTabStore = create<TabStoreState>((set, _get) => ({
           isActive: true,
           icon: 'terminal',
           iconColor: 'var(--green)',
+          connectionType: 'local',
+        },
+      ],
+    }));
+    return tabId;
+  },
+
+  addSSHTab: (sessionId: string, sshSessionId: string, title: string) => {
+    const tabId = `tab-${nextTabId++}`;
+    set((state) => ({
+      tabs: [
+        ...state.tabs.map((t) => ({ ...t, isActive: false })),
+        {
+          id: tabId,
+          terminalSessionId: sessionId,
+          title,
+          isActive: true,
+          icon: 'terminal',
+          iconColor: 'var(--accent)',
+          connectionType: 'ssh',
+          sshSessionId,
         },
       ],
     }));

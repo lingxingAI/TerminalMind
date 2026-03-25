@@ -91,6 +91,15 @@ importers:
       '@terminalmind/core':
         specifier: workspace:*
         version: link:../core
+      '@terminalmind/ext-connections':
+        specifier: workspace:*
+        version: link:../../extensions/ext-connections
+      '@terminalmind/ext-sftp':
+        specifier: workspace:*
+        version: link:../../extensions/ext-sftp
+      '@terminalmind/ext-ssh':
+        specifier: workspace:*
+        version: link:../../extensions/ext-ssh
       '@terminalmind/ext-terminal':
         specifier: workspace:*
         version: link:../../extensions/ext-terminal

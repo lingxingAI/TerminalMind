@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import type { ShellInfo } from '@terminalmind/api';
 import { useTabStore } from '../../stores/tab-store';
 import { ShellSelector } from '../terminal/ShellSelector';
+import { SSHStatusIndicator } from '../ssh/SSHStatusIndicator';
 
 export function TabBar(): React.ReactElement {
   const tabs = useTabStore((s) => s.tabs);
@@ -57,6 +58,9 @@ export function TabBar(): React.ReactElement {
             onClick={() => setActiveTab(tab.id)}
           >
             <span className="tab-icon" style={{ color: tab.iconColor }}>●</span>
+            {tab.connectionType === 'ssh' && tab.sshSessionId ? (
+              <SSHStatusIndicator sshSessionId={tab.sshSessionId} className="tab-ssh-status" />
+            ) : null}
             <span className="tab-title">{tab.title}</span>
             <button
               className="tab-close"

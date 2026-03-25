@@ -9,6 +9,7 @@ import { StatusBar } from './components/layout/StatusBar';
 import { Toolbar } from './components/layout/Toolbar';
 import { CommandPalette } from './components/command-palette/CommandPalette';
 import { useGlobalKeybindings } from './hooks/useGlobalKeybindings';
+import { useTransferIpcSync } from './hooks/useTransferIpcSync';
 
 export function App(): React.ReactElement {
   const tabs = useTabStore((s) => s.tabs);
@@ -19,6 +20,7 @@ export function App(): React.ReactElement {
   const closeCommandPalette = useCallback(() => setCommandPaletteVisible(false), []);
 
   useGlobalKeybindings({ onCommandPalette: openCommandPalette });
+  useTransferIpcSync();
 
   const [error, setError] = useState<string | null>(null);
 

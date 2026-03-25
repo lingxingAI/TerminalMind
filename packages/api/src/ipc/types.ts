@@ -58,6 +58,8 @@ export interface SSHSessionInfo {
   readonly status: 'connecting' | 'connected' | 'disconnected' | 'error';
   readonly connectedAt: number | undefined;
   readonly error: string | undefined;
+  /** Set when `connect` opened an interactive shell wired to PTY_DATA / TerminalView */
+  readonly terminalSessionId?: string;
 }
 
 export interface ExecResult {
@@ -117,6 +119,29 @@ export interface SFTPTransferProgress {
   readonly bytesTransferred: number;
   readonly totalBytes: number;
   readonly percentage: number;
+  readonly sshSessionId?: string;
+}
+
+/** Full queue task snapshot (listTransfers + optional hydration for UI store). */
+export interface SFTPQueueTaskInfo {
+  readonly id: string;
+  readonly sshSessionId: string;
+  readonly direction: 'upload' | 'download';
+  readonly localPath: string;
+  readonly remotePath: string;
+  readonly filename: string;
+  readonly status: 'queued' | 'transferring' | 'completed' | 'failed';
+  readonly progress: number;
+  readonly bytesTransferred: number;
+  readonly totalBytes: number;
+  readonly error?: string;
+}
+
+export interface LocalDirEntry {
+  readonly name: string;
+  readonly isDirectory: boolean;
+  readonly size: number;
+  readonly mtimeMs: number;
 }
 
 export interface ConnectionProfileTimestamps {
@@ -218,7 +243,7 @@ export interface PreloadAPI {
     download(options: Readonly<SFTPTransferOptions>): Promise<SFTPTransferResult>;
     cancelTransfer(transferId: string): Promise<void>;
     retryTransfer(transferId: string): Promise<SFTPTransferResult>;
-    listTransfers(): Promise<readonly SFTPTransferProgress[]>;
+    listTransfers(): Promise<readonly SFTPQueueTaskInfo[]>;
     clearCompleted(): Promise<void>;
     onTransferProgress(callback: (payload: Readonly<SFTPTransferProgress>) => void): () => void;
     onTransferComplete(callback: (payload: Readonly<SFTPTransferResult>) => void): () => void;
@@ -237,6 +262,9 @@ export interface PreloadAPI {
       type: T,
       callback: (payload: EventPayloadMap[T]) => void
     ): () => void;
+  };
+  local: {
+    readDirectory(absolutePath: string): Promise<readonly LocalDirEntry[]>;
   };
 }
 

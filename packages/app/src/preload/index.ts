@@ -111,6 +111,9 @@ const api: PreloadAPI = {
       };
     },
   },
+  local: {
+    readDirectory: (absolutePath) => ipcRenderer.invoke(IpcChannels.LOCAL_READ_DIRECTORY, { absolutePath }),
+  },
   connections: {
     list: () => ipcRenderer.invoke(IpcChannels.CONNECTIONS_LIST),
     get: (profileId) => ipcRenderer.invoke(IpcChannels.CONNECTIONS_GET, { profileId }),

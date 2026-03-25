@@ -4,6 +4,7 @@ import { useLayoutStore } from '../../stores/layout-store';
 const ITEMS = [
   { id: 'terminal', label: 'Terminal', icon: '>_' },
   { id: 'files', label: 'Files', icon: '📁' },
+  { id: 'connections', label: 'Connections', icon: '🔌' },
   { id: 'search', label: 'Search', icon: '🔍' },
   { id: 'ai', label: 'AI', icon: '✦' },
   { id: 'extensions', label: 'Extensions', icon: '⧉' },

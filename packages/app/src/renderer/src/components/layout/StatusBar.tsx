@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTabStore } from '../../stores/tab-store';
+import { SSHStatusIndicator } from '../ssh/SSHStatusIndicator';
 
 export function StatusBar(): React.ReactElement {
   const activeTab = useTabStore((s) => s.tabs.find((t) => t.isActive));
@@ -9,7 +10,15 @@ export function StatusBar(): React.ReactElement {
       <div className="status-left">
         {activeTab && (
           <>
-            <span className="status-item" style={{ color: 'var(--green)' }}>●</span>
+            {activeTab.connectionType === 'ssh' && activeTab.sshSessionId ? (
+              <SSHStatusIndicator
+                sshSessionId={activeTab.sshSessionId}
+                variant="statusBar"
+                className="status-ssh-indicator"
+              />
+            ) : (
+              <span className="status-item" style={{ color: 'var(--green)' }}>●</span>
+            )}
             <span className="status-item">{activeTab.title}</span>
           </>
         )}

@@ -29,6 +29,8 @@ export type {
   SFTPTransferOptions,
   SFTPTransferResult,
   SFTPTransferProgress,
+  SFTPQueueTaskInfo,
+  LocalDirEntry,
   ConnectionProfileTimestamps,
   ConnectionProfile,
   ConnectionStoreChangeEvent,
