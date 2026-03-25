@@ -137,6 +137,7 @@ class SSHTerminalSession implements TerminalSession {
     readonly title: string,
     readonly shellPath: string,
     private readonly channel: ClientChannel,
+    readonly cwd: string = '~',
   ) {
     channel.on('data', (chunk: Buffer) => {
       this._onData.fire(chunk.toString('utf8'));
@@ -368,6 +369,7 @@ export class ManagedSSHSession implements SSHSession {
       title,
       `ssh://${this.config.host}`,
       channel,
+      '~',
     );
   }
 

@@ -8,6 +8,8 @@ export interface TerminalSession {
   readonly title: string;
   readonly pid: number;
   readonly shellPath: string;
+  /** Resolved working directory when the session was created. */
+  readonly cwd: string;
   readonly status: 'running' | 'exited';
   readonly exitCode: number | undefined;
   readonly createdAt: number;
@@ -45,18 +47,19 @@ export class TerminalService implements ITerminalService {
     const cols = options.cols ?? 80;
     const rows = options.rows ?? 24;
     const id = crypto.randomUUID();
+    const cwd = options.cwd ?? process.cwd();
 
     const ptyProcess = pty.spawn(shellPath, options.args ? [...options.args] : [], {
       name: 'xterm-256color',
       cols,
       rows,
-      cwd: options.cwd ?? process.cwd(),
+      cwd,
       env: options.env
         ? ({ ...process.env, ...options.env } as Record<string, string>)
         : (process.env as Record<string, string>),
     });
 
-    const session = new ManagedSession(id, options.title ?? shellPath, ptyProcess, shellPath);
+    const session = new ManagedSession(id, options.title ?? shellPath, ptyProcess, shellPath, cwd);
     this.sessions.set(id, session);
 
     session.onExit(() => {
@@ -111,6 +114,7 @@ class ManagedSession implements TerminalSession {
       kill: () => void;
     },
     readonly shellPath: string,
+    readonly cwd: string,
   ) {
     ptyProcess.onData((data: string) => {
       this._onData.fire(data);

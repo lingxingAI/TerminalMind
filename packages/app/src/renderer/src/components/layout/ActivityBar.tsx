@@ -6,7 +6,7 @@ const ITEMS = [
   { id: 'files', label: 'Files', icon: '📁' },
   { id: 'connections', label: 'Connections', icon: '🔌' },
   { id: 'search', label: 'Search', icon: '🔍' },
-  { id: 'ai', label: 'AI', icon: '✦' },
+  { id: 'ai', label: 'AI', icon: '✨' },
   { id: 'extensions', label: 'Extensions', icon: '⧉' },
   { id: 'settings', label: 'Settings', icon: '⚙' },
 ] as const;

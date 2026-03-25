@@ -16,3 +16,5 @@ export {
   createAICommandPipeline,
   parseCommandFromAIResponse,
 } from './pipeline/index';
+export { ConversationStore } from './conversation-store';
+export type { StoredConversation } from './conversation-store';

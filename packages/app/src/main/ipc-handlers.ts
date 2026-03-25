@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { basename, join } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
 import { ipcMain, type BrowserWindow } from 'electron';
@@ -19,6 +20,9 @@ import type {
   SSHStatusChangePayload,
   TerminalCreateOptions,
   TerminalSessionInfo,
+  AICommandContext,
+  AICompletionRequest,
+  AISettings,
 } from '@terminalmind/api';
 import type { ICommandRegistry, IEventBus } from '@terminalmind/core';
 import type {
@@ -36,9 +40,150 @@ import type {
   TerminalSession,
   TransferTask,
 } from '@terminalmind/services';
-import { TransferQueue } from '@terminalmind/services';
+import {
+  AIProviderService,
+  AiSecretStore,
+  ContextCollector,
+  ConversationStore,
+  createAICommandPipeline,
+  OpenRouterProvider,
+  PipelineEngineImpl,
+  TransferQueue,
+  type IConfigService,
+} from '@terminalmind/services';
 
 const configStore = new Map<string, unknown>();
+
+const OPENROUTER_PROVIDER_ID = 'openrouter';
+
+const terminalLineAccumulator = new Map<string, string>();
+const terminalCommandHistory = new Map<string, string[]>();
+const terminalOutputSnippets = new Map<string, string>();
+const MAX_COMMAND_HISTORY = 200;
+const MAX_OUTPUT_SNIPPET_CHARS = 8000;
+
+function appendTerminalCommands(sessionId: string, data: string): void {
+  let acc = terminalLineAccumulator.get(sessionId) ?? '';
+  acc += data;
+  const parts = acc.split(/\r?\n/);
+  const tail = parts.pop() ?? '';
+  terminalLineAccumulator.set(sessionId, tail);
+  for (const part of parts) {
+    const t = part.replace(/\r/g, '').trim();
+    if (t.length > 0) {
+      const list = terminalCommandHistory.get(sessionId) ?? [];
+      list.push(t);
+      while (list.length > MAX_COMMAND_HISTORY) {
+        list.shift();
+      }
+      terminalCommandHistory.set(sessionId, list);
+    }
+  }
+}
+
+function appendTerminalOutput(sessionId: string, data: string): void {
+  const prev = terminalOutputSnippets.get(sessionId) ?? '';
+  terminalOutputSnippets.set(sessionId, (prev + data).slice(-MAX_OUTPUT_SNIPPET_CHARS));
+}
+
+function clearTerminalBuffers(sessionId: string): void {
+  terminalLineAccumulator.delete(sessionId);
+  terminalCommandHistory.delete(sessionId);
+  terminalOutputSnippets.delete(sessionId);
+}
+
+function readAiSettings(config: IConfigService): AISettings {
+  return {
+    activeProviderId: config.get('ai.activeProviderId', OPENROUTER_PROVIDER_ID),
+    defaultModel: config.get('ai.defaultModel', 'openai/gpt-4o-mini'),
+    temperature: config.get('ai.temperature', 0.7),
+    maxTokens: config.get('ai.maxTokens', 2048),
+    systemPrompt: config.get('ai.systemPrompt', ''),
+    includeContext: config.get('ai.includeContext', true),
+    recentCommandsCount: config.get('ai.recentCommandsCount', 5),
+    includeRecentOutput: config.get('ai.includeRecentOutput', false),
+  };
+}
+
+async function buildTerminalAiContext(
+  opts: Readonly<{
+    sessionId?: string;
+    settings: AISettings;
+    contextCollector: ContextCollector;
+    terminalService: ITerminalService;
+    sshTerminals: ReadonlyMap<string, { readonly term: TerminalSession; readonly sshSessionId: string }>;
+  }>,
+): Promise<AICommandContext> {
+  const { sessionId, settings, contextCollector, terminalService, sshTerminals: sshTerms } = opts;
+  let cwd = process.cwd();
+  if (sessionId) {
+    const local = terminalService.getSession(sessionId);
+    if (local) {
+      cwd = (local as unknown as { cwd: string }).cwd;
+    } else {
+      const sshT = sshTerms.get(sessionId);
+      if (sshT) {
+        cwd = (sshT.term as unknown as { cwd: string }).cwd;
+      }
+    }
+  }
+  const n = Math.max(0, Math.min(50, settings.recentCommandsCount));
+  const recentCommands =
+    sessionId && n > 0 ? (terminalCommandHistory.get(sessionId) ?? []).slice(-n) : [];
+  const recentOutput =
+    settings.includeRecentOutput && sessionId ? (terminalOutputSnippets.get(sessionId) ?? '') : '';
+  return contextCollector.collect({ cwd, recentCommands, recentOutput });
+}
+
+export interface AiMainServices {
+  readonly aiProvider: AIProviderService;
+  readonly aiSecrets: AiSecretStore;
+  readonly conversationStore: ConversationStore;
+  readonly contextCollector: ContextCollector;
+  readonly config: IConfigService;
+  readonly pipelineEngine: PipelineEngineImpl;
+  readonly commandPipeline: ReturnType<typeof createAICommandPipeline>;
+}
+
+const activeAiStreams = new Map<string, AbortController>();
+
+function stripClientSignal(request: Readonly<AICompletionRequest>): Omit<AICompletionRequest, 'signal'> {
+  const { signal: _ignored, ...rest } = request;
+  return rest;
+}
+
+async function runAiStream(
+  mainWindow: BrowserWindow,
+  streamId: string,
+  request: AICompletionRequest,
+  signal: AbortSignal,
+  aiProvider: AIProviderService,
+): Promise<void> {
+  try {
+    const streamRequest: AICompletionRequest = { ...request, signal };
+    for await (const chunk of aiProvider.stream(streamRequest)) {
+      if (signal.aborted) {
+        break;
+      }
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IpcEventChannels.AI_STREAM_CHUNK, { streamId, chunk });
+      }
+      if (chunk.done) {
+        break;
+      }
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!mainWindow.isDestroyed() && !signal.aborted) {
+      mainWindow.webContents.send(IpcEventChannels.AI_STREAM_CHUNK, {
+        streamId,
+        chunk: { content: `\n\n[Error] ${msg}`, done: true },
+      });
+    }
+  } finally {
+    activeAiStreams.delete(streamId);
+  }
+}
 
 function normalizeSavedConnectionProfile(input: unknown): ServiceConnectionProfile {
   const p = input as Record<string, unknown>;
@@ -105,6 +250,7 @@ function wireTerminalSessionToRenderer(
   sshService: ISSHService,
   session: TerminalSession,
   onSftpCleanup?: (sshSessionId: string) => void,
+  onPtyData?: (sessionId: string, data: string) => void,
 ): void {
   let buffer = '';
   let flushScheduled = false;
@@ -114,10 +260,12 @@ function wireTerminalSessionToRenderer(
       flushScheduled = true;
       setImmediate(() => {
         if (!mainWindow.isDestroyed()) {
+          const chunk = buffer;
           mainWindow.webContents.send(IpcEventChannels.PTY_DATA, {
             sessionId: session.id,
-            data: buffer,
+            data: chunk,
           });
+          onPtyData?.(session.id, chunk);
         }
         buffer = '';
         flushScheduled = false;
@@ -125,6 +273,7 @@ function wireTerminalSessionToRenderer(
     }
   });
   session.onExit((e) => {
+    clearTerminalBuffers(session.id);
     const sshEntry = sshTerminals.get(session.id);
     if (sshEntry) {
       sshTerminals.delete(session.id);
@@ -212,6 +361,7 @@ export function registerIpcHandlers(
   eventBus: IEventBus,
   connectionStore: IConnectionStore,
   _hostKeyStore: IHostKeyStore,
+  ai: AiMainServices,
 ): void {
   connectionStore.onChange((event: Readonly<ConnectionStoreChangeEvent>) => {
     if (!mainWindow.isDestroyed()) {
@@ -251,7 +401,7 @@ export function registerIpcHandlers(
   ipcMain.handle(IpcChannels.TERMINAL_CREATE, async (_event, options: TerminalCreateOptions) => {
     try {
       const session = await terminalService.create(options);
-      wireTerminalSessionToRenderer(mainWindow, sshService, session);
+      wireTerminalSessionToRenderer(mainWindow, sshService, session, undefined, appendTerminalOutput);
       return toSessionInfo(session);
     } catch (err) {
       console.error('Failed to create terminal session:', err);
@@ -260,6 +410,7 @@ export function registerIpcHandlers(
   });
 
   ipcMain.handle(IpcChannels.TERMINAL_DESTROY, async (_event, args: { sessionId: string }) => {
+    clearTerminalBuffers(args.sessionId);
     const sshEntry = sshTerminals.get(args.sessionId);
     if (sshEntry) {
       sshTerminals.delete(args.sessionId);
@@ -326,6 +477,7 @@ export function registerIpcHandlers(
   });
 
   ipcMain.on(IpcEventChannels.PTY_INPUT, (_event, payload: { sessionId: string; data: string }) => {
+    appendTerminalCommands(payload.sessionId, payload.data);
     const local = terminalService.getSession(payload.sessionId);
     if (local) {
       local.write(payload.data);
@@ -405,7 +557,7 @@ export function registerIpcHandlers(
     try {
       const term = await sshSession.shell();
       sshTerminals.set(term.id, { term, sshSessionId: sshSession.id });
-      wireTerminalSessionToRenderer(mainWindow, sshService, term, disposeSftp);
+      wireTerminalSessionToRenderer(mainWindow, sshService, term, disposeSftp, appendTerminalOutput);
       return toSSHSessionInfo(sshSession, term.id);
     } catch (e) {
       await sshService.disconnect(sshSession.id);
@@ -656,5 +808,138 @@ export function registerIpcHandlers(
       all.map((p: ServiceConnectionProfile) => p.id),
       'json',
     );
+  });
+
+  ipcMain.handle(IpcChannels.AI_COMPLETE, async (_event, request: AICompletionRequest) => {
+    const s = readAiSettings(ai.config);
+    const base = stripClientSignal(request);
+    const merged: AICompletionRequest = {
+      ...base,
+      model: base.model || s.defaultModel,
+      temperature: base.temperature ?? s.temperature,
+      maxTokens: base.maxTokens ?? s.maxTokens,
+      systemPrompt:
+        base.systemPrompt ?? (s.systemPrompt.trim().length > 0 ? s.systemPrompt : undefined),
+    };
+    return ai.aiProvider.complete(merged);
+  });
+
+  ipcMain.handle(
+    IpcChannels.AI_GENERATE_COMMAND,
+    async (
+      _event,
+      args: Readonly<{ prompt: string; context?: AICommandContext; sessionId?: string }>,
+    ) => {
+      const settings = readAiSettings(ai.config);
+      const ctx =
+        settings.includeContext === true
+          ? await buildTerminalAiContext({
+              sessionId: args.sessionId,
+              settings,
+              contextCollector: ai.contextCollector,
+              terminalService,
+              sshTerminals,
+            })
+          : args.context;
+      return ai.pipelineEngine.execute(ai.commandPipeline, {
+        prompt: args.prompt,
+        context: ctx,
+        model: settings.defaultModel,
+      });
+    },
+  );
+
+  ipcMain.handle(IpcChannels.AI_STREAM_START, async (_event, request: AICompletionRequest) => {
+    const streamId = randomUUID();
+    const s = readAiSettings(ai.config);
+    const base = stripClientSignal(request);
+    const merged: AICompletionRequest = {
+      ...base,
+      model: base.model || s.defaultModel,
+      temperature: base.temperature ?? s.temperature,
+      maxTokens: base.maxTokens ?? s.maxTokens,
+      systemPrompt:
+        base.systemPrompt ?? (s.systemPrompt.trim().length > 0 ? s.systemPrompt : undefined),
+    };
+    const ac = new AbortController();
+    activeAiStreams.set(streamId, ac);
+    void runAiStream(mainWindow, streamId, merged, ac.signal, ai.aiProvider);
+    return streamId;
+  });
+
+  ipcMain.handle(IpcChannels.AI_STREAM_CANCEL, async (_event, args: Readonly<{ streamId: string }>) => {
+    activeAiStreams.get(args.streamId)?.abort();
+  });
+
+  ipcMain.handle(IpcChannels.AI_LIST_PROVIDERS, async () => [...ai.aiProvider.listProviders()]);
+
+  ipcMain.handle(
+    IpcChannels.AI_SET_ACTIVE_PROVIDER,
+    async (_event, args: Readonly<{ providerId: string }>) => {
+      ai.aiProvider.setActiveProvider(args.providerId);
+    },
+  );
+
+  ipcMain.handle(IpcChannels.AI_LIST_MODELS, async () => {
+    const p = ai.aiProvider.getActiveProvider();
+    if (p instanceof OpenRouterProvider) {
+      try {
+        await p.listModels();
+      } catch {
+        /* return cached or empty */
+      }
+    }
+    return [...p.models];
+  });
+
+  ipcMain.handle(
+    IpcChannels.AI_SET_API_KEY,
+    async (_event, args: Readonly<{ providerId: string; apiKey: string }>) => {
+      await ai.aiSecrets.setApiKey(args.providerId, args.apiKey);
+    },
+  );
+
+  ipcMain.handle(IpcChannels.AI_GET_SETTINGS, async () => readAiSettings(ai.config));
+
+  ipcMain.handle(
+    IpcChannels.AI_UPDATE_SETTINGS,
+    async (_event, partial: Readonly<Partial<AISettings>>) => {
+      const entries: [keyof AISettings, string][] = [
+        ['activeProviderId', 'ai.activeProviderId'],
+        ['defaultModel', 'ai.defaultModel'],
+        ['temperature', 'ai.temperature'],
+        ['maxTokens', 'ai.maxTokens'],
+        ['systemPrompt', 'ai.systemPrompt'],
+        ['includeContext', 'ai.includeContext'],
+        ['recentCommandsCount', 'ai.recentCommandsCount'],
+        ['includeRecentOutput', 'ai.includeRecentOutput'],
+      ];
+      for (const [field, key] of entries) {
+        if (partial[field] !== undefined) {
+          await ai.config.set(key, partial[field]);
+        }
+      }
+      if (partial.activeProviderId !== undefined) {
+        try {
+          ai.aiProvider.setActiveProvider(partial.activeProviderId);
+        } catch {
+          /* provider may not exist */
+        }
+      }
+    },
+  );
+
+  ipcMain.handle(IpcChannels.AI_LIST_CONVERSATIONS, async () => ai.conversationStore.list());
+
+  ipcMain.handle(IpcChannels.AI_GET_CONVERSATION, async (_event, args: Readonly<{ id: string }>) => {
+    const doc = ai.conversationStore.get(args.id);
+    if (!doc) {
+      return null;
+    }
+    return { id: doc.id, messages: [...doc.messages] };
+  });
+
+  ipcMain.handle(IpcChannels.AI_DELETE_CONVERSATION, async (_event, args: Readonly<{ id: string }>) => {
+    ai.conversationStore.delete(args.id);
   });
 }

@@ -232,6 +232,7 @@ export class OpenRouterProvider implements AIProvider {
         max_tokens: request.maxTokens ?? undefined,
         stream: true,
       }),
+      ...(request.signal !== undefined ? { signal: request.signal } : {}),
     });
     if (!res.ok) {
       const msg = await readErrorBody(res);

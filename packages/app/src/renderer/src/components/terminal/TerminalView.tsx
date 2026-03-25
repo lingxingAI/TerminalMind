@@ -3,6 +3,8 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import '@xterm/xterm/css/xterm.css';
+import { useInlineAi } from '../../hooks/useInlineAi';
+import { InlineAiOverlay } from './InlineAiOverlay';
 
 interface TerminalViewProps {
   sessionId: string;
@@ -13,6 +15,11 @@ export function TerminalView({ sessionId, visible }: TerminalViewProps): React.R
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const atLineStartRef = useRef(true);
+
+  const inlineAi = useInlineAi(sessionId, visible, terminalRef, atLineStartRef);
+  const handleInlineInputRef = useRef(inlineAi.handleInput);
+  handleInlineInputRef.current = inlineAi.handleInput;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -62,10 +69,16 @@ export function TerminalView({ sessionId, visible }: TerminalViewProps): React.R
     fitAddonRef.current = fitAddon;
 
     terminal.onData((data) => {
+      if (handleInlineInputRef.current(data)) {
+        return;
+      }
       window.api.terminal.sendInput(sessionId, data);
     });
 
     const unsubData = window.api.terminal.onData(sessionId, (data) => {
+      if (data.includes('\n') || data.includes('\r')) {
+        atLineStartRef.current = true;
+      }
       terminal.write(data);
     });
 
@@ -87,7 +100,7 @@ export function TerminalView({ sessionId, visible }: TerminalViewProps): React.R
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [sessionId]);
+  }, [sessionId, inlineAi]);
 
   useEffect(() => {
     if (visible && fitAddonRef.current) {
@@ -100,12 +113,21 @@ export function TerminalView({ sessionId, visible }: TerminalViewProps): React.R
 
   return (
     <div
-      ref={containerRef}
+      className="terminal-view-host"
       style={{
         width: '100%',
         height: '100%',
         display: visible ? 'block' : 'none',
+        position: 'relative',
       }}
-    />
+    >
+      <div ref={containerRef} className="terminal-view-xterm" style={{ width: '100%', height: '100%' }} />
+      <InlineAiOverlay
+        mode={inlineAi.mode}
+        prompt={inlineAi.prompt}
+        generatedCommand={inlineAi.generatedCommand}
+        error={inlineAi.error}
+      />
+    </div>
   );
 }

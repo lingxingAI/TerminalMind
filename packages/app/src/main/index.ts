@@ -1,4 +1,5 @@
 import { app, BrowserWindow, shell } from 'electron';
+import { homedir } from 'os';
 import { join } from 'path';
 import {
   ServiceContainer,
@@ -9,13 +10,22 @@ import {
 } from '@terminalmind/core';
 import type { IConnectionStore, IHostKeyStore, ISSHService } from '@terminalmind/services';
 import {
+  AIProviderService,
+  AiSecretStore,
+  ConfigService,
   ConnectionStore,
+  ContextCollector,
+  ConversationStore,
+  createAICommandPipeline,
   ExtensionHost,
   HostKeyStore,
+  OpenRouterProvider,
+  PipelineEngineImpl,
   SSHService,
   TerminalService,
   createSecretStore,
   createShellDiscovery,
+  type IConfigService,
 } from '@terminalmind/services';
 import { registerIpcHandlers } from './ipc-handlers';
 import * as extAi from '@terminalmind/ext-ai';
@@ -36,6 +46,10 @@ const extensionHost = new ExtensionHost(commandRegistry, eventBus);
 const sshServiceToken = createServiceToken<ISSHService>('ISSHService');
 const connectionStoreToken = createServiceToken<IConnectionStore>('IConnectionStore');
 const hostKeyStoreToken = createServiceToken<IHostKeyStore>('IHostKeyStore');
+const configServiceToken = createServiceToken<IConfigService>('IConfigService');
+const aiProviderServiceToken = createServiceToken<AIProviderService>('AIProviderService');
+const conversationStoreToken = createServiceToken<ConversationStore>('ConversationStore');
+const aiPipelineEngineToken = createServiceToken<PipelineEngineImpl>('AIPipelineEngine');
 
 services.register(sshServiceToken, () => sshService);
 
@@ -80,8 +94,37 @@ app.whenReady().then(async () => {
   const connectionStore = new ConnectionStore(secretStore, userData);
   const hostKeyStore = new HostKeyStore(userData);
 
+  const tmRoot = join(homedir(), '.terminalmind');
+  const configService = new ConfigService(tmRoot);
+  const aiSecrets = new AiSecretStore(secretStore);
+  const openRouter = new OpenRouterProvider({
+    id: 'openrouter',
+    name: 'OpenRouter',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    getApiKey: () => aiSecrets.getApiKey('openrouter'),
+  });
+  const aiProviderService = new AIProviderService(eventBus);
+  aiProviderService.registerProvider(openRouter);
+  const aiPipelineEngine = new PipelineEngineImpl();
+  const conversationStore = new ConversationStore(tmRoot);
+  const contextCollector = new ContextCollector(shellDiscovery);
+  const aiCommandPipeline = createAICommandPipeline(aiProviderService);
+
+  const key = await aiSecrets.getApiKey('openrouter');
+  if (key?.trim()) {
+    try {
+      await openRouter.listModels();
+    } catch {
+      /* offline or invalid key at startup */
+    }
+  }
+
   services.register(connectionStoreToken, () => connectionStore);
   services.register(hostKeyStoreToken, () => hostKeyStore);
+  services.register(configServiceToken, () => configService);
+  services.register(aiProviderServiceToken, () => aiProviderService);
+  services.register(conversationStoreToken, () => conversationStore);
+  services.register(aiPipelineEngineToken, () => aiPipelineEngine);
 
   registerIpcHandlers(
     mainWindow,
@@ -92,6 +135,15 @@ app.whenReady().then(async () => {
     eventBus,
     connectionStore,
     hostKeyStore,
+    {
+      aiProvider: aiProviderService,
+      aiSecrets,
+      conversationStore,
+      contextCollector,
+      config: configService,
+      pipelineEngine: aiPipelineEngine,
+      commandPipeline: aiCommandPipeline,
+    },
   );
 
   extensionHost.registerExtension('ext-terminal', extTerminal);

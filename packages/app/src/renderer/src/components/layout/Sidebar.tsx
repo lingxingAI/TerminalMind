@@ -6,6 +6,7 @@ import { ConnectionSearch } from '../connections/ConnectionSearch';
 import { ConnectionTree } from '../connections/ConnectionTree';
 import { ConnectionEditor } from '../connections/ConnectionEditor';
 import { FileBrowser } from '../sftp/FileBrowser';
+import { AiSidebarPanel } from '../ai/AiSidebarPanel';
 
 export function Sidebar(): React.ReactElement {
   const view = useLayoutStore((s) => s.activeSidebarView);
@@ -31,6 +32,15 @@ export function Sidebar(): React.ReactElement {
   }, [visible, view, refreshConnections]);
 
   if (!visible) return <></>;
+
+  if (view === 'ai') {
+    return (
+      <div className="sidebar" style={{ width }}>
+        <AiSidebarPanel />
+        {isEditorOpen ? <ConnectionEditor /> : null}
+      </div>
+    );
+  }
 
   const isFilesView = view === 'files' || view === 'sftp';
 

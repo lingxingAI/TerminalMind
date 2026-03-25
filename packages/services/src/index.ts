@@ -55,4 +55,6 @@ export {
   PipelineEngineImpl,
   createAICommandPipeline,
   parseCommandFromAIResponse,
+  ConversationStore,
 } from './ai/index';
+export type { StoredConversation } from './ai/index';

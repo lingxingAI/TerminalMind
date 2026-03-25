@@ -219,6 +219,8 @@ export interface AICompletionRequest {
   readonly temperature?: number;
   readonly maxTokens?: number;
   readonly context?: AICommandContext;
+  /** Main-process only: aborts in-flight HTTP when streaming (ignored from renderer). */
+  readonly signal?: AbortSignal;
 }
 
 export interface AICommandContext {
@@ -367,8 +369,11 @@ export interface PreloadAPI {
   };
   ai: {
     complete(request: AICompletionRequest): Promise<AICompletionResponse>;
-    generateCommand(prompt: string, context?: AICommandContext): Promise<AIGenerateCommandResult>;
-    streamStart(request: AICompletionRequest): Promise<string>;
+    generateCommand(prompt: string, context?: AICommandContext, sessionId?: string): Promise<AIGenerateCommandResult>;
+    streamStart(
+      request: AICompletionRequest,
+      options?: Readonly<{ conversationId?: string; messages?: readonly AIMessage[] }>,
+    ): Promise<string>;
     streamCancel(streamId: string): Promise<void>;
     onStreamChunk(callback: (payload: { streamId: string; chunk: AIStreamChunk }) => void): () => void;
     listProviders(): Promise<AIProviderInfo[]>;
