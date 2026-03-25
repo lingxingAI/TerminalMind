@@ -203,6 +203,15 @@ const api: PreloadAPI = {
     },
     respondToPermissionPrompt: (extensionId, granted) =>
       ipcRenderer.invoke(IpcChannels.PERMISSION_PROMPT_RESULT, { extensionId, granted }),
+    onExtensionStateChanged: (callback) => {
+      const handler = (_event: unknown, payload: unknown) => {
+        callback(payload as Readonly<{ extensionId: string }>);
+      };
+      ipcRenderer.on(IpcEventChannels.EXTENSION_STATE_CHANGED, handler);
+      return () => {
+        ipcRenderer.removeListener(IpcEventChannels.EXTENSION_STATE_CHANGED, handler);
+      };
+    },
   },
 };
 

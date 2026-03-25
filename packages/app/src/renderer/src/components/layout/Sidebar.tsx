@@ -7,6 +7,7 @@ import { ConnectionTree } from '../connections/ConnectionTree';
 import { ConnectionEditor } from '../connections/ConnectionEditor';
 import { FileBrowser } from '../sftp/FileBrowser';
 import { AiSidebarPanel } from '../ai/AiSidebarPanel';
+import { ExtensionsSidebarPanel } from '../extensions/ExtensionsSidebarPanel';
 
 export function Sidebar(): React.ReactElement {
   const view = useLayoutStore((s) => s.activeSidebarView);
@@ -37,6 +38,15 @@ export function Sidebar(): React.ReactElement {
     return (
       <div className="sidebar" style={{ width }}>
         <AiSidebarPanel />
+        {isEditorOpen ? <ConnectionEditor /> : null}
+      </div>
+    );
+  }
+
+  if (view === 'extensions') {
+    return (
+      <div className="sidebar" style={{ width }}>
+        <ExtensionsSidebarPanel />
         {isEditorOpen ? <ConnectionEditor /> : null}
       </div>
     );

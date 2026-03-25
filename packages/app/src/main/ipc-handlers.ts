@@ -1,13 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { basename, join } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
-import { ipcMain, type BrowserWindow } from 'electron';
+import { ipcMain, shell, type BrowserWindow } from 'electron';
 import { IpcChannels, IpcEventChannels } from '@terminalmind/api';
 import type {
   CommandInfo,
   ConnectionStoreChangeEvent,
   ExecResult,
+  InstalledExtension,
   LocalDirEntry,
+  Permission,
   PortForwardInfo,
   PortForwardOptions,
   SFTPFileEntry,
@@ -51,6 +53,7 @@ import {
   PermissionManager,
   TransferQueue,
   type IConfigService,
+  type MarketplaceService,
 } from '@terminalmind/services';
 
 const configStore = new Map<string, unknown>();
@@ -341,6 +344,40 @@ function taskToQueueInfo(task: TransferTask): SFTPQueueTaskInfo {
   return base;
 }
 
+const BUILTIN_INSTALLED_EXTENSIONS: readonly InstalledExtension[] = (() => {
+  const now = Date.now();
+  const mk = (
+    id: string,
+    displayName: string,
+    pkg: string,
+    desc: string,
+  ): InstalledExtension => ({
+    id,
+    manifest: {
+      name: pkg,
+      displayName,
+      version: '0.1.0',
+      description: desc,
+      author: 'TerminalMind',
+      terminalmind: { entry: './dist/index.js', activationEvents: ['*'] },
+    },
+    installPath: `builtin://${id}`,
+    installedAt: now,
+    updatedAt: now,
+    enabled: true,
+    isBuiltin: true,
+  });
+  return [
+    mk('ext-terminal', 'Terminal', '@terminalmind/ext-terminal', 'Built-in terminal integration'),
+    mk('ext-ai', 'AI', '@terminalmind/ext-ai', 'Built-in AI features'),
+    mk('ext-ssh', 'SSH', '@terminalmind/ext-ssh', 'Built-in SSH client'),
+    mk('ext-sftp', 'SFTP', '@terminalmind/ext-sftp', 'Built-in SFTP browser'),
+    mk('ext-connections', 'Connections', '@terminalmind/ext-connections', 'Built-in connection profiles'),
+  ];
+})();
+
+const BUILTIN_EXTENSION_IDS = new Set(BUILTIN_INSTALLED_EXTENSIONS.map((e) => e.id));
+
 function taskToProgress(task: TransferTask): SFTPTransferProgress {
   const base: SFTPTransferProgress = {
     transferId: task.id,
@@ -364,6 +401,7 @@ export function registerIpcHandlers(
   _hostKeyStore: IHostKeyStore,
   permissionManager: PermissionManager,
   ai: AiMainServices,
+  marketplaceService: MarketplaceService,
 ): void {
   connectionStore.onChange((event: Readonly<ConnectionStoreChangeEvent>) => {
     if (!mainWindow.isDestroyed()) {
@@ -404,6 +442,15 @@ export function registerIpcHandlers(
     category: 'Window',
     handler: async () => {
       mainWindow.close();
+    },
+  });
+
+  commandRegistry.register({
+    id: 'extensions.openDirectory',
+    title: 'Open Extensions Folder',
+    category: 'Extensions',
+    handler: async () => {
+      await shell.openPath(marketplaceService.extensionsRoot);
     },
   });
 
@@ -951,4 +998,75 @@ export function registerIpcHandlers(
   ipcMain.handle(IpcChannels.AI_DELETE_CONVERSATION, async (_event, args: Readonly<{ id: string }>) => {
     ai.conversationStore.delete(args.id);
   });
+
+  ipcMain.handle(
+    IpcChannels.MARKETPLACE_SEARCH,
+    async (_event, args: Readonly<{ query: string; page?: number }>) => {
+      return marketplaceService.search(args.query, args.page);
+    },
+  );
+
+  ipcMain.handle(IpcChannels.MARKETPLACE_GET_DETAILS, async (_event, args: Readonly<{ name: string }>) => {
+    return marketplaceService.getDetails(args.name);
+  });
+
+  ipcMain.handle(
+    IpcChannels.MARKETPLACE_INSTALL,
+    async (_event, args: Readonly<{ name: string; version?: string }>) => {
+      await marketplaceService.install(args.name, args.version);
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.MARKETPLACE_UNINSTALL,
+    async (_event, args: Readonly<{ extensionId: string }>) => {
+      await marketplaceService.uninstall(args.extensionId);
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.MARKETPLACE_UPDATE,
+    async (_event, args: Readonly<{ extensionId: string }>) => {
+      await marketplaceService.update(args.extensionId);
+    },
+  );
+
+  ipcMain.handle(IpcChannels.EXTENSION_LIST, async () => [
+    ...BUILTIN_INSTALLED_EXTENSIONS,
+    ...marketplaceService.listInstalled(),
+  ]);
+
+  ipcMain.handle(
+    IpcChannels.EXTENSION_ENABLE,
+    async (_event, args: Readonly<{ extensionId: string }>) => {
+      if (BUILTIN_EXTENSION_IDS.has(args.extensionId)) {
+        return;
+      }
+      await marketplaceService.enable(args.extensionId);
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.EXTENSION_DISABLE,
+    async (_event, args: Readonly<{ extensionId: string }>) => {
+      if (BUILTIN_EXTENSION_IDS.has(args.extensionId)) {
+        return;
+      }
+      await marketplaceService.disable(args.extensionId);
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.EXTENSION_GET_PERMISSIONS,
+    async (_event, args: Readonly<{ extensionId: string }>) => {
+      return permissionManager.getGrants(args.extensionId);
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.EXTENSION_REVOKE_PERMISSION,
+    async (_event, args: Readonly<{ extensionId: string; permission: Permission }>) => {
+      permissionManager.revoke(args.extensionId, args.permission);
+    },
+  );
 }

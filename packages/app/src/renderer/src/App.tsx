@@ -10,6 +10,8 @@ import { Toolbar } from './components/layout/Toolbar';
 import { CommandPalette } from './components/command-palette/CommandPalette';
 import { useGlobalKeybindings } from './hooks/useGlobalKeybindings';
 import { useTransferIpcSync } from './hooks/useTransferIpcSync';
+import { PermissionPromptModal } from './components/extensions/PermissionPromptModal';
+import type { PermissionPrompt } from '@terminalmind/api';
 
 export function App(): React.ReactElement {
   const tabs = useTabStore((s) => s.tabs);
@@ -23,6 +25,13 @@ export function App(): React.ReactElement {
   useTransferIpcSync();
 
   const [error, setError] = useState<string | null>(null);
+  const [permissionPrompt, setPermissionPrompt] = useState<PermissionPrompt | null>(null);
+
+  useEffect(() => {
+    return window.api.extensions.onPermissionPrompt((p) => {
+      setPermissionPrompt(p);
+    });
+  }, []);
 
   useEffect(() => {
     if (tabs.length === 0) {
@@ -70,6 +79,7 @@ export function App(): React.ReactElement {
         </div>
       </div>
       <CommandPalette visible={commandPaletteVisible} onClose={closeCommandPalette} />
+      <PermissionPromptModal prompt={permissionPrompt} onClose={() => setPermissionPrompt(null)} />
     </div>
   );
 }

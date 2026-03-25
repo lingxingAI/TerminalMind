@@ -1,0 +1,17 @@
+{
+  "name": "@terminalmind/create-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "terminalmind-create-extension": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepare": "tsc"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.4.0"
+  }
+}

@@ -86,4 +86,12 @@ export type { StoredConversation } from './ai/index';
 export type { IPermissionManager } from '@terminalmind/api';
 export type { PermissionManagerDeps } from './permissions/index';
 export { PermissionManager } from './permissions/index';
+export type { IMarketplaceService, MarketplaceServiceDeps } from './marketplace/index';
+export { MarketplaceService, RegistryClient } from './marketplace/index';
+export type { IRegistryClient, RegistryClientOptions, RegistryIndexFile } from './marketplace/index';
+export {
+  extensionInstallDirectory,
+  isPathInsideDirectory,
+  isSafeTarExtractPath,
+} from './marketplace/index';
 export { PermissionDeniedError, withPermissionCheck } from './extension-api/index';

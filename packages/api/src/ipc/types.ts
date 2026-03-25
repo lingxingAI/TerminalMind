@@ -507,6 +507,7 @@ export interface PreloadAPI {
     revokePermission(extensionId: string, permission: Permission): Promise<void>;
     onPermissionPrompt(callback: (prompt: PermissionPrompt) => void): () => void;
     respondToPermissionPrompt(extensionId: string, granted: boolean): Promise<void>;
+    onExtensionStateChanged(callback: (payload: Readonly<{ extensionId: string }>) => void): () => void;
   };
 }
 

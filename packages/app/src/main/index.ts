@@ -10,6 +10,7 @@ import {
 } from '@terminalmind/core';
 import type { IConnectionStore, IHostKeyStore, ISSHService } from '@terminalmind/services';
 import { IpcEventChannels } from '@terminalmind/api';
+import type { InstallProgress, PermissionPrompt } from '@terminalmind/api';
 import {
   AIProviderService,
   AiSecretStore,
@@ -25,9 +26,11 @@ import {
   EXTENSION_TERMINAL_SERVICE,
   ExtensionHost,
   HostKeyStore,
+  MarketplaceService,
   OpenRouterProvider,
   PermissionManager,
   PipelineEngineImpl,
+  RegistryClient,
   SSHService,
   TerminalService,
   createSecretStore,
@@ -143,7 +146,7 @@ app.whenReady().then(async () => {
   const permissionManager = new PermissionManager({
     permissionsFilePath: join(tmRoot, 'permissions.json'),
     eventBus,
-    notifyPermissionPrompt: (prompt) => {
+    notifyPermissionPrompt: (prompt: PermissionPrompt) => {
       if (!mainWindow.isDestroyed()) {
         mainWindow.webContents.send(IpcEventChannels.PERMISSION_PROMPT, prompt);
       }
@@ -154,6 +157,29 @@ app.whenReady().then(async () => {
   }
 
   extensionHost = new ExtensionHost(commandRegistry, eventBus, services, permissionManager);
+
+  const registryClient = new RegistryClient();
+  const marketplaceService = new MarketplaceService({
+    registryClient,
+    extensionHost: extensionHost!,
+    eventBus,
+    extensionsRoot: join(tmRoot, 'extensions'),
+    onInstallProgress: (progress: InstallProgress) => {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IpcEventChannels.MARKETPLACE_INSTALL_PROGRESS, progress);
+      }
+    },
+  });
+
+  const forwardExtensionState = (extensionId: string): void => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IpcEventChannels.EXTENSION_STATE_CHANGED, { extensionId });
+    }
+  };
+  eventBus.on('extension.installed', (p) => forwardExtensionState(p.extensionId));
+  eventBus.on('extension.uninstalled', (p) => forwardExtensionState(p.extensionId));
+  eventBus.on('extension.enabled', (p) => forwardExtensionState(p.extensionId));
+  eventBus.on('extension.disabled', (p) => forwardExtensionState(p.extensionId));
 
   registerIpcHandlers(
     mainWindow,
@@ -174,6 +200,7 @@ app.whenReady().then(async () => {
       pipelineEngine: aiPipelineEngine,
       commandPipeline: aiCommandPipeline,
     },
+    marketplaceService,
   );
 
   extensionHost!.registerExtension('ext-terminal', extTerminal);
