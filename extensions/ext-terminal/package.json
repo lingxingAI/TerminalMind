@@ -1,0 +1,32 @@
+{
+  "name": "@terminalmind/ext-terminal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "terminalmind": {
+    "entry": "./dist/index.js",
+    "activationEvents": ["*"],
+    "contributes": {
+      "commands": [
+        { "command": "terminal.new", "title": "New Terminal", "category": "Terminal" },
+        { "command": "terminal.close", "title": "Close Terminal", "category": "Terminal" },
+        { "command": "terminal.list", "title": "List Terminals", "category": "Terminal" }
+      ],
+      "views": [
+        { "id": "terminal-list", "name": "Terminals", "icon": "terminal", "location": "sidebar" }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@terminalmind/api": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
