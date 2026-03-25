@@ -9,6 +9,7 @@ import {
   createServiceToken,
 } from '@terminalmind/core';
 import type { IConnectionStore, IHostKeyStore, ISSHService } from '@terminalmind/services';
+import { IpcEventChannels } from '@terminalmind/api';
 import {
   AIProviderService,
   AiSecretStore,
@@ -17,9 +18,15 @@ import {
   ContextCollector,
   ConversationStore,
   createAICommandPipeline,
+  EXTENSION_AI_PROVIDER_SERVICE,
+  EXTENSION_CONFIG_SERVICE,
+  EXTENSION_CONNECTION_STORE,
+  EXTENSION_PIPELINE_ENGINE,
+  EXTENSION_TERMINAL_SERVICE,
   ExtensionHost,
   HostKeyStore,
   OpenRouterProvider,
+  PermissionManager,
   PipelineEngineImpl,
   SSHService,
   TerminalService,
@@ -41,7 +48,8 @@ const commandRegistry = new CommandRegistryImpl({ services, events: eventBus, pi
 const shellDiscovery = createShellDiscovery();
 const terminalService = new TerminalService(shellDiscovery, eventBus);
 const sshService = new SSHService(eventBus);
-const extensionHost = new ExtensionHost(commandRegistry, eventBus);
+
+let extensionHost: ExtensionHost | undefined;
 
 const sshServiceToken = createServiceToken<ISSHService>('ISSHService');
 const connectionStoreToken = createServiceToken<IConnectionStore>('IConnectionStore');
@@ -126,6 +134,27 @@ app.whenReady().then(async () => {
   services.register(conversationStoreToken, () => conversationStore);
   services.register(aiPipelineEngineToken, () => aiPipelineEngine);
 
+  services.register(EXTENSION_TERMINAL_SERVICE, () => terminalService);
+  services.register(EXTENSION_CONNECTION_STORE, () => connectionStore);
+  services.register(EXTENSION_CONFIG_SERVICE, () => configService);
+  services.register(EXTENSION_AI_PROVIDER_SERVICE, () => aiProviderService);
+  services.register(EXTENSION_PIPELINE_ENGINE, () => aiPipelineEngine);
+
+  const permissionManager = new PermissionManager({
+    permissionsFilePath: join(tmRoot, 'permissions.json'),
+    eventBus,
+    notifyPermissionPrompt: (prompt) => {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IpcEventChannels.PERMISSION_PROMPT, prompt);
+      }
+    },
+  });
+  for (const id of ['ext-terminal', 'ext-ai', 'ext-ssh', 'ext-sftp', 'ext-connections'] as const) {
+    permissionManager.registerBuiltin(id);
+  }
+
+  extensionHost = new ExtensionHost(commandRegistry, eventBus, services, permissionManager);
+
   registerIpcHandlers(
     mainWindow,
     terminalService,
@@ -135,6 +164,7 @@ app.whenReady().then(async () => {
     eventBus,
     connectionStore,
     hostKeyStore,
+    permissionManager,
     {
       aiProvider: aiProviderService,
       aiSecrets,
@@ -146,11 +176,11 @@ app.whenReady().then(async () => {
     },
   );
 
-  extensionHost.registerExtension('ext-terminal', extTerminal);
-  extensionHost.registerExtension('ext-ai', extAi);
-  extensionHost.registerExtension('ext-ssh', extSsh);
-  extensionHost.registerExtension('ext-sftp', extSftp);
-  extensionHost.registerExtension('ext-connections', extConnections);
+  extensionHost!.registerExtension('ext-terminal', extTerminal);
+  extensionHost!.registerExtension('ext-ai', extAi);
+  extensionHost!.registerExtension('ext-ssh', extSsh);
+  extensionHost!.registerExtension('ext-sftp', extSftp);
+  extensionHost!.registerExtension('ext-connections', extConnections);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -158,7 +188,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  void extensionHost.deactivateAll();
+  void extensionHost?.deactivateAll();
   if (process.platform !== 'darwin') {
     app.quit();
   }

@@ -7,6 +7,17 @@ export type EventType =
   | 'terminal.exited'
   | 'extension.activated'
   | 'extension.deactivated'
+  | 'extension.installed'
+  | 'extension.uninstalled'
+  | 'extension.workerCrashed'
+  | 'extension.enabled'
+  | 'extension.disabled'
+  | 'permission.granted'
+  | 'permission.denied'
+  | 'permission.revoked'
+  | 'marketplace.installStart'
+  | 'marketplace.installComplete'
+  | 'marketplace.installError'
   | 'command.registered'
   | 'ssh.connecting'
   | 'ssh.connected'
@@ -32,7 +43,18 @@ export interface EventPayloadMap {
   'terminal.exited': { readonly sessionId: string; readonly exitCode: number };
   'extension.activated': { readonly extensionId: string };
   'extension.deactivated': { readonly extensionId: string };
-  'command.registered': { readonly commandId: string };
+  'extension.installed': { readonly extensionId: string; readonly version: string };
+  'extension.uninstalled': { readonly extensionId: string };
+  'extension.workerCrashed': { readonly extensionId: string; readonly error: string };
+  'extension.enabled': { readonly extensionId: string };
+  'extension.disabled': { readonly extensionId: string };
+  'permission.granted': { readonly extensionId: string; readonly permission: string };
+  'permission.denied': { readonly extensionId: string; readonly permission: string };
+  'permission.revoked': { readonly extensionId: string; readonly permission: string };
+  'marketplace.installStart': { readonly extensionId: string };
+  'marketplace.installComplete': { readonly extensionId: string; readonly version: string };
+  'marketplace.installError': { readonly extensionId: string; readonly error: string };
+  'command.registered': { readonly commandId: string; readonly extensionId?: string };
   'ssh.connecting': { readonly sessionId: string; readonly host: string };
   'ssh.connected': { readonly sessionId: string; readonly host: string };
   'ssh.disconnected': { readonly sessionId: string; readonly host: string; readonly reason?: string };

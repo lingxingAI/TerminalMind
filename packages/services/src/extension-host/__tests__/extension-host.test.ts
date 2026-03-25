@@ -3,13 +3,15 @@
 import { ExtensionHost } from '../extension-host';
 import { CommandRegistryImpl, EventBusImpl, ServiceContainer, PipelineEngineStub } from '@terminalmind/core';
 import type { ExtensionModule, ExtensionContext, TerminalMindAPI } from '@terminalmind/api';
+import { registerTestServicesForExtensionAPI } from '../test-utils';
 
 function createHost() {
   const services = new ServiceContainer();
+  registerTestServicesForExtensionAPI(services);
   const events = new EventBusImpl();
   const pipeline = new PipelineEngineStub();
   const registry = new CommandRegistryImpl({ services, events, pipeline });
-  const host = new ExtensionHost(registry, events);
+  const host = new ExtensionHost(registry, events, services);
   return { host, registry, events };
 }
 
@@ -93,5 +95,18 @@ describe('ExtensionHost', () => {
     const module: ExtensionModule = { activate() {} };
     host.registerExtension('dup-ext', module);
     expect(() => host.registerExtension('dup-ext', module)).toThrow('already registered');
+  });
+
+  it('should emit command.registered with extensionId when a command is registered', () => {
+    const { host, events } = createHost();
+    const spy = vi.fn();
+    events.on('command.registered', spy);
+    const module: ExtensionModule = {
+      activate(_ctx: ExtensionContext, api: TerminalMindAPI) {
+        api.commands.register('ext.cmd.meta', async () => null);
+      },
+    };
+    host.registerExtension('meta-ext', module);
+    expect(spy).toHaveBeenCalledWith({ commandId: 'ext.cmd.meta', extensionId: 'meta-ext' });
   });
 });

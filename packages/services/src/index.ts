@@ -1,4 +1,29 @@
-export { ExtensionHost } from './extension-host/index';
+export {
+  ExtensionHost,
+  parseExtensionManifestFromPackageJson,
+  WorkerExtensionHost,
+  isWorkerMessage,
+} from './extension-host/index';
+export type {
+  ExtensionHostWorkerOptions,
+  RegisterExtensionOptions,
+  IWorkerExtensionHost,
+  WorkerExtensionHostOptions,
+  WorkerExtensionStatus,
+  WorkerApiPermissionCheck,
+  WorkerMessage,
+} from './extension-host/index';
+export { registerTestServicesForExtensionAPI } from './extension-host/test-utils';
+export {
+  createTerminalMindAPI,
+  requirePermission,
+  EXTENSION_AI_PROVIDER_SERVICE,
+  EXTENSION_CONFIG_SERVICE,
+  EXTENSION_CONNECTION_STORE,
+  EXTENSION_PIPELINE_ENGINE,
+  EXTENSION_TERMINAL_SERVICE,
+} from './extension-api/index';
+export type { CreateTerminalMindAPIOptions, ViewRegistries } from './extension-api/index';
 export type { IShellDiscoveryAdapter } from './terminal/index';
 export { Win32ShellDiscovery, UnixShellDiscovery, createShellDiscovery } from './terminal/index';
 export type { TerminalSession, ITerminalService } from './terminal/index';
@@ -58,3 +83,7 @@ export {
   ConversationStore,
 } from './ai/index';
 export type { StoredConversation } from './ai/index';
+export type { IPermissionManager } from '@terminalmind/api';
+export type { PermissionManagerDeps } from './permissions/index';
+export { PermissionManager } from './permissions/index';
+export { PermissionDeniedError, withPermissionCheck } from './extension-api/index';

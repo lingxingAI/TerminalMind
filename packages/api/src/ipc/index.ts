@@ -38,4 +38,13 @@ export type {
   PtyInputPayload,
   EventBroadcastPayload,
   PreloadAPI,
+  Permission,
+  PermissionGrant,
+  PermissionPrompt,
+  ExtensionManifest,
+  ExtensionContributions,
+  InstalledExtension,
+  RegistryEntry,
+  MarketplaceSearchResult,
+  InstallProgress,
 } from './types';

@@ -1,5 +1,110 @@
 import type { Disposable, EventType, EventPayloadMap } from '@terminalmind/core';
 
+// Permission types (Phase 4)
+export type Permission =
+  | 'terminal.execute'
+  | 'connections.read'
+  | 'connections.write'
+  | 'fs.read'
+  | 'fs.write'
+  | 'ai.invoke'
+  | 'network.outbound';
+
+export interface PermissionGrant {
+  readonly extensionId: string;
+  readonly permission: Permission;
+  readonly granted: boolean;
+  readonly timestamp: number;
+}
+
+export interface PermissionPrompt {
+  readonly extensionId: string;
+  readonly extensionName: string;
+  readonly permissions: readonly Permission[];
+  readonly reason?: string;
+}
+
+export interface IPermissionManager {
+  check(extensionId: string, permission: Permission): boolean;
+  request(extensionId: string, permissions: readonly Permission[]): Promise<PermissionGrant[]>;
+  revoke(extensionId: string, permission: Permission): void;
+  getGrants(extensionId: string): PermissionGrant[];
+  isBuiltin(extensionId: string): boolean;
+  registerBuiltin(extensionId: string): void;
+}
+
+// Extension manifest types (Phase 4 — package.json `terminalmind` block)
+export interface ExtensionManifest {
+  readonly name: string;
+  readonly displayName?: string;
+  readonly version: string;
+  readonly description?: string;
+  readonly author?: string;
+  readonly license?: string;
+  readonly repository?: string;
+  readonly terminalmind: {
+    readonly entry: string;
+    readonly activationEvents: readonly string[];
+    readonly permissions?: readonly Permission[];
+    readonly contributes?: ExtensionContributions;
+  };
+}
+
+export interface ExtensionContributions {
+  readonly commands?: readonly { readonly id: string; readonly title: string; readonly category?: string }[];
+  readonly views?: {
+    readonly sidebar?: readonly { readonly id: string; readonly name: string }[];
+    readonly panel?: readonly { readonly id: string; readonly name: string }[];
+  };
+  readonly menus?: readonly { readonly command: string; readonly group?: string }[];
+  readonly keybindings?: readonly { readonly command: string; readonly key: string; readonly when?: string }[];
+  readonly configuration?: readonly {
+    readonly key: string;
+    readonly type: string;
+    readonly default?: unknown;
+    readonly description?: string;
+  }[];
+}
+
+export interface InstalledExtension {
+  readonly id: string;
+  readonly manifest: ExtensionManifest;
+  readonly installPath: string;
+  readonly installedAt: number;
+  readonly updatedAt: number;
+  readonly enabled: boolean;
+  readonly isBuiltin: boolean;
+}
+
+// Marketplace types
+export interface RegistryEntry {
+  readonly name: string;
+  readonly displayName: string;
+  readonly description: string;
+  readonly version: string;
+  readonly author: string;
+  readonly repository: string;
+  readonly tarballUrl: string;
+  readonly sha512: string;
+  readonly downloads: number;
+  readonly tags: readonly string[];
+  readonly publishedAt: string;
+}
+
+export interface MarketplaceSearchResult {
+  readonly entries: readonly RegistryEntry[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+export interface InstallProgress {
+  readonly extensionId: string;
+  readonly phase: 'downloading' | 'verifying' | 'extracting' | 'activating' | 'done' | 'error';
+  readonly progress: number; // 0-100
+  readonly error?: string;
+}
+
 export interface TerminalCreateOptions {
   readonly shell?: string;
   readonly args?: readonly string[];
@@ -385,6 +490,23 @@ export interface PreloadAPI {
     listConversations(): Promise<ConversationInfo[]>;
     getConversation(id: string): Promise<{ id: string; messages: AIMessage[] } | null>;
     deleteConversation(id: string): Promise<void>;
+  };
+  marketplace: {
+    search(query: string, page?: number): Promise<MarketplaceSearchResult>;
+    getDetails(name: string): Promise<RegistryEntry | null>;
+    install(name: string, version?: string): Promise<void>;
+    uninstall(extensionId: string): Promise<void>;
+    update(extensionId: string): Promise<void>;
+    onInstallProgress(callback: (progress: InstallProgress) => void): () => void;
+  };
+  extensions: {
+    list(): Promise<InstalledExtension[]>;
+    enable(extensionId: string): Promise<void>;
+    disable(extensionId: string): Promise<void>;
+    getPermissions(extensionId: string): Promise<PermissionGrant[]>;
+    revokePermission(extensionId: string, permission: Permission): Promise<void>;
+    onPermissionPrompt(callback: (prompt: PermissionPrompt) => void): () => void;
+    respondToPermissionPrompt(extensionId: string, granted: boolean): Promise<void>;
   };
 }
 

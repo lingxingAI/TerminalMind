@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ExtensionHost } from '@terminalmind/services';
+import { ExtensionHost, registerTestServicesForExtensionAPI } from '@terminalmind/services';
 import { CommandRegistryImpl, EventBusImpl, ServiceContainer, PipelineEngineStub } from '@terminalmind/core';
 import type { ExtensionContext, TerminalMindAPI } from '@terminalmind/api';
 import { activate } from '../index.js';
@@ -15,10 +15,11 @@ const CONNECTION_COMMANDS = [
 
 function createHost() {
   const services = new ServiceContainer();
+  registerTestServicesForExtensionAPI(services);
   const events = new EventBusImpl();
   const pipeline = new PipelineEngineStub();
   const registry = new CommandRegistryImpl({ services, events, pipeline });
-  const host = new ExtensionHost(registry, events);
+  const host = new ExtensionHost(registry, events, services);
   return { host, registry };
 }
 

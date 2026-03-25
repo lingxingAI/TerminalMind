@@ -1,6 +1,8 @@
 import type { ExtensionContext, TerminalMindAPI } from '@terminalmind/api';
 
 export function activate(ctx: ExtensionContext, api: TerminalMindAPI): void {
+  void api.terminal.list();
+
   ctx.subscriptions.push(
     api.commands.register('terminal.new', async () => {
       return { command: 'terminal.new' };

@@ -5,6 +5,7 @@ import { activate, deactivate } from '../index';
 function createApiMock() {
   const register = vi.fn(() => ({ dispose: vi.fn() }));
   const registerSidebarView = vi.fn(() => ({ dispose: vi.fn() }));
+  const d = () => ({ dispose: vi.fn() });
   const api: TerminalMindAPI = {
     commands: {
       register,
@@ -13,9 +14,55 @@ function createApiMock() {
     },
     views: {
       registerSidebarView,
+      registerPanelView: vi.fn(d),
+      registerStatusBarItem: vi.fn(d),
     },
     events: {
-      on: vi.fn(() => ({ dispose: vi.fn() })),
+      on: vi.fn(d),
+    },
+    terminal: {
+      create: vi.fn(),
+      list: vi.fn(() => []),
+      sendInput: vi.fn(),
+      destroy: vi.fn(),
+      onData: vi.fn(d),
+      onExit: vi.fn(d),
+    },
+    connections: {
+      list: vi.fn(),
+      get: vi.fn(),
+      save: vi.fn(),
+      remove: vi.fn(),
+    },
+    ai: {
+      complete: vi.fn(),
+      stream: vi.fn(),
+      registerProvider: vi.fn(d),
+      listProviders: vi.fn(() => []),
+    },
+    fs: {
+      readFile: vi.fn(),
+      writeFile: vi.fn(),
+      readDir: vi.fn(),
+      stat: vi.fn(),
+      exists: vi.fn(),
+      mkdir: vi.fn(),
+      remove: vi.fn(),
+    },
+    pipeline: {
+      registerStep: vi.fn(d),
+      pipe: vi.fn(),
+      execute: vi.fn(),
+    },
+    config: {
+      get: vi.fn(),
+      set: vi.fn(),
+      onDidChange: vi.fn(d),
+    },
+    window: {
+      showNotification: vi.fn(),
+      showQuickPick: vi.fn(),
+      showInputBox: vi.fn(),
     },
   };
   return { api, register, registerSidebarView };

@@ -48,6 +48,7 @@ import {
   createAICommandPipeline,
   OpenRouterProvider,
   PipelineEngineImpl,
+  PermissionManager,
   TransferQueue,
   type IConfigService,
 } from '@terminalmind/services';
@@ -361,6 +362,7 @@ export function registerIpcHandlers(
   eventBus: IEventBus,
   connectionStore: IConnectionStore,
   _hostKeyStore: IHostKeyStore,
+  permissionManager: PermissionManager,
   ai: AiMainServices,
 ): void {
   connectionStore.onChange((event: Readonly<ConnectionStoreChangeEvent>) => {
@@ -368,6 +370,13 @@ export function registerIpcHandlers(
       mainWindow.webContents.send(IpcEventChannels.CONNECTION_CHANGED, event);
     }
   });
+
+  ipcMain.handle(
+    IpcChannels.PERMISSION_PROMPT_RESULT,
+    async (_event, args: Readonly<{ extensionId: string; granted: boolean }>) => {
+      permissionManager.handlePromptResult(args.extensionId, args.granted);
+    },
+  );
 
   commandRegistry.register({
     id: 'window.minimize',

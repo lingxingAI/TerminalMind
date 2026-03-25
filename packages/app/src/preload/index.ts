@@ -169,6 +169,41 @@ const api: PreloadAPI = {
     getConversation: (id) => ipcRenderer.invoke(IpcChannels.AI_GET_CONVERSATION, { id }),
     deleteConversation: (id) => ipcRenderer.invoke(IpcChannels.AI_DELETE_CONVERSATION, { id }),
   },
+  marketplace: {
+    search: (query, page) => ipcRenderer.invoke(IpcChannels.MARKETPLACE_SEARCH, { query, page }),
+    getDetails: (name) => ipcRenderer.invoke(IpcChannels.MARKETPLACE_GET_DETAILS, { name }),
+    install: (name, version) => ipcRenderer.invoke(IpcChannels.MARKETPLACE_INSTALL, { name, version }),
+    uninstall: (extensionId) => ipcRenderer.invoke(IpcChannels.MARKETPLACE_UNINSTALL, { extensionId }),
+    update: (extensionId) => ipcRenderer.invoke(IpcChannels.MARKETPLACE_UPDATE, { extensionId }),
+    onInstallProgress: (callback) => {
+      const handler = (_event: unknown, payload: unknown) => {
+        callback(payload as Parameters<typeof callback>[0]);
+      };
+      ipcRenderer.on(IpcEventChannels.MARKETPLACE_INSTALL_PROGRESS, handler);
+      return () => {
+        ipcRenderer.removeListener(IpcEventChannels.MARKETPLACE_INSTALL_PROGRESS, handler);
+      };
+    },
+  },
+  extensions: {
+    list: () => ipcRenderer.invoke(IpcChannels.EXTENSION_LIST),
+    enable: (extensionId) => ipcRenderer.invoke(IpcChannels.EXTENSION_ENABLE, { extensionId }),
+    disable: (extensionId) => ipcRenderer.invoke(IpcChannels.EXTENSION_DISABLE, { extensionId }),
+    getPermissions: (extensionId) => ipcRenderer.invoke(IpcChannels.EXTENSION_GET_PERMISSIONS, { extensionId }),
+    revokePermission: (extensionId, permission) =>
+      ipcRenderer.invoke(IpcChannels.EXTENSION_REVOKE_PERMISSION, { extensionId, permission }),
+    onPermissionPrompt: (callback) => {
+      const handler = (_event: unknown, payload: unknown) => {
+        callback(payload as Parameters<typeof callback>[0]);
+      };
+      ipcRenderer.on(IpcEventChannels.PERMISSION_PROMPT, handler);
+      return () => {
+        ipcRenderer.removeListener(IpcEventChannels.PERMISSION_PROMPT, handler);
+      };
+    },
+    respondToPermissionPrompt: (extensionId, granted) =>
+      ipcRenderer.invoke(IpcChannels.PERMISSION_PROMPT_RESULT, { extensionId, granted }),
+  },
 };
 
 contextBridge.exposeInMainWorld('api', api);

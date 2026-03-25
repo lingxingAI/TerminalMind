@@ -7,6 +7,8 @@ export interface Command<TArgs = unknown, TResult = unknown> {
   readonly id: string;
   readonly title: string;
   readonly category: string;
+  /** Set when the command is registered via the extension API. */
+  readonly sourceExtensionId?: string;
   readonly handler: (
     args: Readonly<TArgs>,
     ctx: Readonly<CommandContext>

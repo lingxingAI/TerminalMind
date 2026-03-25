@@ -52,6 +52,17 @@ export const IpcChannels = {
   AI_LIST_CONVERSATIONS: 'ai:listConversations',
   AI_GET_CONVERSATION: 'ai:getConversation',
   AI_DELETE_CONVERSATION: 'ai:deleteConversation',
+  MARKETPLACE_SEARCH: 'marketplace:search',
+  MARKETPLACE_GET_DETAILS: 'marketplace:getDetails',
+  MARKETPLACE_INSTALL: 'marketplace:install',
+  MARKETPLACE_UNINSTALL: 'marketplace:uninstall',
+  MARKETPLACE_UPDATE: 'marketplace:update',
+  EXTENSION_LIST: 'extension:list',
+  EXTENSION_ENABLE: 'extension:enable',
+  EXTENSION_DISABLE: 'extension:disable',
+  EXTENSION_GET_PERMISSIONS: 'extension:getPermissions',
+  EXTENSION_REVOKE_PERMISSION: 'extension:revokePermission',
+  PERMISSION_PROMPT_RESULT: 'permission:promptResult',
 } as const;
 
 export const IpcEventChannels = {
@@ -67,4 +78,7 @@ export const IpcEventChannels = {
   AI_STREAM_CHUNK: 'ai:streamChunk',
   AI_STREAM_DONE: 'ai:streamDone',
   AI_STREAM_ERROR: 'ai:streamError',
+  MARKETPLACE_INSTALL_PROGRESS: 'marketplace:installProgress',
+  PERMISSION_PROMPT: 'permission:prompt',
+  EXTENSION_STATE_CHANGED: 'extension:stateChanged',
 } as const;

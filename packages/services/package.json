@@ -14,11 +14,14 @@
     "@terminalmind/api": "workspace:*",
     "@terminalmind/core": "workspace:*",
     "keytar": "^7.9.0",
+    "semver": "^7.7.4",
     "strip-ansi": "^7.1.0",
     "node-pty": "^1.0.0",
-    "ssh2": "^1.16.0"
+    "ssh2": "^1.16.0",
+    "tar": "^7.5.13"
   },
   "devDependencies": {
+    "@types/semver": "^7.7.0",
     "@types/ssh2": "^1.15.0",
     "typescript": "^5.6.0"
   }
