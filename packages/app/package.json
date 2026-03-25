@@ -12,6 +12,7 @@
   "dependencies": {
     "@terminalmind/api": "workspace:*",
     "@terminalmind/core": "workspace:*",
+    "@terminalmind/ext-ai": "workspace:*",
     "@terminalmind/ext-connections": "workspace:*",
     "@terminalmind/ext-sftp": "workspace:*",
     "@terminalmind/ext-ssh": "workspace:*",

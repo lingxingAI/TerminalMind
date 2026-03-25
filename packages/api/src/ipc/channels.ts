@@ -39,6 +39,19 @@ export const IpcChannels = {
   CONNECTIONS_REMOVE: 'connections:remove',
   CONNECTIONS_IMPORT: 'connections:import',
   CONNECTIONS_EXPORT: 'connections:export',
+  AI_COMPLETE: 'ai:complete',
+  AI_GENERATE_COMMAND: 'ai:generateCommand',
+  AI_STREAM_START: 'ai:streamStart',
+  AI_STREAM_CANCEL: 'ai:streamCancel',
+  AI_LIST_PROVIDERS: 'ai:listProviders',
+  AI_SET_ACTIVE_PROVIDER: 'ai:setActiveProvider',
+  AI_LIST_MODELS: 'ai:listModels',
+  AI_SET_API_KEY: 'ai:setApiKey',
+  AI_GET_SETTINGS: 'ai:getSettings',
+  AI_UPDATE_SETTINGS: 'ai:updateSettings',
+  AI_LIST_CONVERSATIONS: 'ai:listConversations',
+  AI_GET_CONVERSATION: 'ai:getConversation',
+  AI_DELETE_CONVERSATION: 'ai:deleteConversation',
 } as const;
 
 export const IpcEventChannels = {
@@ -51,4 +64,7 @@ export const IpcEventChannels = {
   SFTP_TRANSFER_PROGRESS: 'sftp:transferProgress',
   SFTP_TRANSFER_COMPLETE: 'sftp:transferComplete',
   CONNECTION_CHANGED: 'connection:changed',
+  AI_STREAM_CHUNK: 'ai:streamChunk',
+  AI_STREAM_DONE: 'ai:streamDone',
+  AI_STREAM_ERROR: 'ai:streamError',
 } as const;

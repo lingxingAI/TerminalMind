@@ -37,3 +37,22 @@ export type {
   TransferTask,
 } from './sftp/index';
 export { SFTPChannel, toFileStat, TransferQueue } from './sftp/index';
+export type {
+  OpenRouterProviderOptions,
+  ContextCollectorInput,
+  IAIProviderService,
+  AICommandPipelineInput,
+  EnrichedAICommandState,
+  IPipelineEngine,
+} from './ai/index';
+export {
+  AIProviderService,
+  OpenRouterProvider,
+  parseSseToAiStreamChunks,
+  AiSecretStore,
+  aiProviderApiKeySecretKey,
+  ContextCollector,
+  PipelineEngineImpl,
+  createAICommandPipeline,
+  parseCommandFromAIResponse,
+} from './ai/index';

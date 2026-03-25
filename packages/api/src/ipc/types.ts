@@ -1,4 +1,4 @@
-import type { EventType, EventPayloadMap } from '@terminalmind/core';
+import type { Disposable, EventType, EventPayloadMap } from '@terminalmind/core';
 
 export interface TerminalCreateOptions {
   readonly shell?: string;
@@ -193,6 +193,105 @@ export interface EventBroadcastPayload<T extends EventType = EventType> {
   readonly payload: EventPayloadMap[T];
 }
 
+// AI types
+export interface AIMessage {
+  readonly role: 'system' | 'user' | 'assistant';
+  readonly content: string;
+}
+
+export interface AIModelInfo {
+  readonly id: string;
+  readonly name: string;
+  readonly contextLength?: number;
+  readonly pricing?: { readonly prompt: number; readonly completion: number };
+}
+
+export interface AIProviderInfo {
+  readonly id: string;
+  readonly name: string;
+  readonly models: readonly AIModelInfo[];
+}
+
+export interface AICompletionRequest {
+  readonly model: string;
+  readonly messages: readonly AIMessage[];
+  readonly systemPrompt?: string;
+  readonly temperature?: number;
+  readonly maxTokens?: number;
+  readonly context?: AICommandContext;
+}
+
+export interface AICommandContext {
+  readonly shell: string;
+  readonly os: string;
+  readonly cwd: string;
+  readonly recentCommands?: readonly string[];
+  readonly recentOutput?: string;
+}
+
+export interface AICompletionResponse {
+  readonly content: string;
+  readonly model: string;
+  readonly usage?: { readonly promptTokens: number; readonly completionTokens: number; readonly totalTokens: number };
+  readonly finishReason?: string;
+}
+
+export interface AIStreamChunk {
+  readonly content: string;
+  readonly done: boolean;
+  readonly model?: string;
+  readonly finishReason?: string;
+}
+
+/** Pluggable AI backend (OpenRouter, local, etc.). */
+export interface AIProvider {
+  readonly id: string;
+  readonly name: string;
+  readonly models: readonly AIModelInfo[];
+
+  complete(request: Readonly<AICompletionRequest>): Promise<AICompletionResponse>;
+
+  stream(request: Readonly<AICompletionRequest>): AsyncIterable<AIStreamChunk>;
+}
+
+export interface IAIProviderService {
+  registerProvider(provider: AIProvider): Disposable;
+
+  listProviders(): readonly AIProviderInfo[];
+
+  getActiveProvider(): AIProvider;
+
+  setActiveProvider(providerId: string): void;
+
+  complete(request: Readonly<AICompletionRequest>): Promise<AICompletionResponse>;
+
+  stream(request: Readonly<AICompletionRequest>): AsyncIterable<AIStreamChunk>;
+}
+
+export interface AIGenerateCommandResult {
+  readonly command: string;
+  readonly explanation?: string;
+}
+
+export interface ConversationInfo {
+  readonly id: string;
+  readonly title: string;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+  readonly messageCount: number;
+}
+
+export interface AISettings {
+  readonly activeProviderId: string;
+  readonly defaultModel: string;
+  readonly temperature: number;
+  readonly maxTokens: number;
+  readonly systemPrompt: string;
+  readonly includeContext: boolean;
+  readonly recentCommandsCount: number;
+  readonly includeRecentOutput: boolean;
+}
+
 export interface PreloadAPI {
   terminal: {
     create(options: Readonly<TerminalCreateOptions>): Promise<TerminalSessionInfo>;
@@ -265,6 +364,22 @@ export interface PreloadAPI {
   };
   local: {
     readDirectory(absolutePath: string): Promise<readonly LocalDirEntry[]>;
+  };
+  ai: {
+    complete(request: AICompletionRequest): Promise<AICompletionResponse>;
+    generateCommand(prompt: string, context?: AICommandContext): Promise<AIGenerateCommandResult>;
+    streamStart(request: AICompletionRequest): Promise<string>;
+    streamCancel(streamId: string): Promise<void>;
+    onStreamChunk(callback: (payload: { streamId: string; chunk: AIStreamChunk }) => void): () => void;
+    listProviders(): Promise<AIProviderInfo[]>;
+    setActiveProvider(providerId: string): Promise<void>;
+    listModels(): Promise<AIModelInfo[]>;
+    setApiKey(providerId: string, apiKey: string): Promise<void>;
+    getSettings(): Promise<AISettings>;
+    updateSettings(settings: Partial<AISettings>): Promise<void>;
+    listConversations(): Promise<ConversationInfo[]>;
+    getConversation(id: string): Promise<{ id: string; messages: AIMessage[] } | null>;
+    deleteConversation(id: string): Promise<void>;
   };
 }
 

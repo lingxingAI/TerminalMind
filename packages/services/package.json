@@ -14,6 +14,7 @@
     "@terminalmind/api": "workspace:*",
     "@terminalmind/core": "workspace:*",
     "keytar": "^7.9.0",
+    "strip-ansi": "^7.1.0",
     "node-pty": "^1.0.0",
     "ssh2": "^1.16.0"
   },

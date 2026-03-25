@@ -1,5 +1,17 @@
 export { IpcChannels, IpcEventChannels } from './channels';
 export type {
+  AIMessage,
+  AIModelInfo,
+  AIProviderInfo,
+  AIProvider,
+  IAIProviderService,
+  AICompletionRequest,
+  AICommandContext,
+  AICompletionResponse,
+  AIStreamChunk,
+  AIGenerateCommandResult,
+  AISettings,
+  ConversationInfo,
   TerminalCreateOptions,
   TerminalSessionInfo,
   ShellInfo,

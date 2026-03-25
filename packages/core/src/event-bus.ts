@@ -17,7 +17,13 @@ export type EventType =
   | 'sftp.transferStart'
   | 'sftp.transferProgress'
   | 'sftp.transferComplete'
-  | 'connection.changed';
+  | 'connection.changed'
+  | 'ai.requestStart'
+  | 'ai.requestComplete'
+  | 'ai.requestError'
+  | 'ai.streamChunk'
+  | 'ai.streamDone'
+  | 'ai.providerChanged';
 
 export interface EventPayloadMap {
   'terminal.created': { readonly sessionId: string; readonly title: string };
@@ -53,6 +59,12 @@ export interface EventPayloadMap {
   };
   'sftp.transferComplete': { readonly transferId: string; readonly success: boolean; readonly error?: string };
   'connection.changed': { readonly type: 'added' | 'updated' | 'removed'; readonly profileId: string };
+  'ai.requestStart': { readonly requestId: string; readonly model: string };
+  'ai.requestComplete': { readonly requestId: string; readonly model: string; readonly tokensUsed: number };
+  'ai.requestError': { readonly requestId: string; readonly error: string };
+  'ai.streamChunk': { readonly streamId: string; readonly content: string };
+  'ai.streamDone': { readonly streamId: string };
+  'ai.providerChanged': { readonly providerId: string };
 }
 
 export interface IEventBus {

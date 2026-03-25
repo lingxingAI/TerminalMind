@@ -27,6 +27,16 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@25.5.0)
 
+  extensions/ext-ai:
+    dependencies:
+      '@terminalmind/api':
+        specifier: workspace:*
+        version: link:../../packages/api
+    devDependencies:
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+
   extensions/ext-connections:
     dependencies:
       '@terminalmind/api':
@@ -91,6 +101,9 @@ importers:
       '@terminalmind/core':
         specifier: workspace:*
         version: link:../core
+      '@terminalmind/ext-ai':
+        specifier: workspace:*
+        version: link:../../extensions/ext-ai
       '@terminalmind/ext-connections':
         specifier: workspace:*
         version: link:../../extensions/ext-connections
@@ -176,6 +189,9 @@ importers:
       ssh2:
         specifier: ^1.16.0
         version: 1.17.0
+      strip-ansi:
+        specifier: ^7.1.0
+        version: 7.2.0
     devDependencies:
       '@types/ssh2':
         specifier: ^1.15.0

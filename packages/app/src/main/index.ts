@@ -18,6 +18,7 @@ import {
   createShellDiscovery,
 } from '@terminalmind/services';
 import { registerIpcHandlers } from './ipc-handlers';
+import * as extAi from '@terminalmind/ext-ai';
 import * as extConnections from '@terminalmind/ext-connections';
 import * as extSftp from '@terminalmind/ext-sftp';
 import * as extSsh from '@terminalmind/ext-ssh';
@@ -94,6 +95,7 @@ app.whenReady().then(async () => {
   );
 
   extensionHost.registerExtension('ext-terminal', extTerminal);
+  extensionHost.registerExtension('ext-ai', extAi);
   extensionHost.registerExtension('ext-ssh', extSsh);
   extensionHost.registerExtension('ext-sftp', extSftp);
   extensionHost.registerExtension('ext-connections', extConnections);

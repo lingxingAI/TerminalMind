@@ -144,6 +144,31 @@ const api: PreloadAPI = {
       };
     },
   },
+  ai: {
+    complete: (request) => ipcRenderer.invoke(IpcChannels.AI_COMPLETE, request),
+    generateCommand: (prompt, context) =>
+      ipcRenderer.invoke(IpcChannels.AI_GENERATE_COMMAND, { prompt, context }),
+    streamStart: (request) => ipcRenderer.invoke(IpcChannels.AI_STREAM_START, request),
+    streamCancel: (streamId) => ipcRenderer.invoke(IpcChannels.AI_STREAM_CANCEL, { streamId }),
+    onStreamChunk: (callback) => {
+      const handler = (_event: unknown, payload: unknown) => {
+        callback(payload as Parameters<typeof callback>[0]);
+      };
+      ipcRenderer.on(IpcEventChannels.AI_STREAM_CHUNK, handler);
+      return () => {
+        ipcRenderer.removeListener(IpcEventChannels.AI_STREAM_CHUNK, handler);
+      };
+    },
+    listProviders: () => ipcRenderer.invoke(IpcChannels.AI_LIST_PROVIDERS),
+    setActiveProvider: (providerId) => ipcRenderer.invoke(IpcChannels.AI_SET_ACTIVE_PROVIDER, { providerId }),
+    listModels: () => ipcRenderer.invoke(IpcChannels.AI_LIST_MODELS),
+    setApiKey: (providerId, apiKey) => ipcRenderer.invoke(IpcChannels.AI_SET_API_KEY, { providerId, apiKey }),
+    getSettings: () => ipcRenderer.invoke(IpcChannels.AI_GET_SETTINGS),
+    updateSettings: (settings) => ipcRenderer.invoke(IpcChannels.AI_UPDATE_SETTINGS, settings),
+    listConversations: () => ipcRenderer.invoke(IpcChannels.AI_LIST_CONVERSATIONS),
+    getConversation: (id) => ipcRenderer.invoke(IpcChannels.AI_GET_CONVERSATION, { id }),
+    deleteConversation: (id) => ipcRenderer.invoke(IpcChannels.AI_DELETE_CONVERSATION, { id }),
+  },
 };
 
 contextBridge.exposeInMainWorld('api', api);

@@ -14,6 +14,7 @@ export default defineConfig({
           '@terminalmind/services',
           '@terminalmind/api',
           '@terminalmind/ext-terminal',
+          '@terminalmind/ext-ai',
           '@terminalmind/ext-ssh',
           '@terminalmind/ext-sftp',
           '@terminalmind/ext-connections',
