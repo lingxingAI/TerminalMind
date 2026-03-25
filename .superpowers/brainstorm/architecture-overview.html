@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TerminalMind — Architecture Overview</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #2a3654;
+    --text: #e2e8f0;
+    --text-dim: #8892a8;
+    --accent: #38bdf8;
+    --accent2: #818cf8;
+    --green: #34d399;
+    --orange: #fb923c;
+    --pink: #f472b6;
+    --yellow: #fbbf24;
+    --red: #f87171;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans SC', sans-serif;
+    padding: 40px;
+    min-height: 100vh;
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+  .header h1 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+  .header .subtitle {
+    color: var(--text-dim);
+    font-size: 0.95rem;
+    font-weight: 300;
+  }
+  .principles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 48px;
+  }
+  .principles .tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    background: var(--surface);
+  }
+  .arch-container {
+    max-width: 960px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .layer {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    overflow: hidden;
+    transition: transform 0.2s;
+  }
+  .layer:hover {
+    transform: translateY(-2px);
+  }
+  .layer-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .layer-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+  .layer-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  .layer-desc {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-left: auto;
+    font-weight: 300;
+  }
+  .layer-body {
+    padding: 16px 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .module {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid;
+    background: var(--surface2);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .module .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* Color coding per layer */
+  .l-gui .layer-icon { background: rgba(56,189,248,0.15); color: var(--accent); }
+  .l-gui .module { border-color: rgba(56,189,248,0.25); color: var(--accent); }
+  .l-gui .dot { background: var(--accent); }
+
+  .l-ext .layer-icon { background: rgba(129,140,248,0.15); color: var(--accent2); }
+  .l-ext .module { border-color: rgba(129,140,248,0.25); color: var(--accent2); }
+  .l-ext .dot { background: var(--accent2); }
+
+  .l-api .layer-icon { background: rgba(52,211,153,0.15); color: var(--green); }
+  .l-api .module { border-color: rgba(52,211,153,0.25); color: var(--green); }
+  .l-api .dot { background: var(--green); }
+
+  .l-svc .layer-icon { background: rgba(251,146,60,0.15); color: var(--orange); }
+  .l-svc .module { border-color: rgba(251,146,60,0.25); color: var(--orange); }
+  .l-svc .dot { background: var(--orange); }
+
+  .l-core .layer-icon { background: rgba(244,114,182,0.15); color: var(--pink); }
+  .l-core .module { border-color: rgba(244,114,182,0.25); color: var(--pink); }
+  .l-core .dot { background: var(--pink); }
+
+  .arrow-row {
+    display: flex;
+    justify-content: center;
+    padding: 4px 0;
+  }
+  .arrow-row svg {
+    width: 24px;
+    height: 20px;
+    opacity: 0.3;
+  }
+
+  .footer {
+    text-align: center;
+    margin-top: 40px;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    font-weight: 300;
+  }
+  .footer span {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>&gt;_ TerminalMind</h1>
+  <div class="subtitle">CLI-First Microkernel Architecture</div>
+</div>
+
+<div class="principles">
+  <span class="tag">Unix 哲学</span>
+  <span class="tag">CLI 优先</span>
+  <span class="tag">GUI/逻辑分离</span>
+  <span class="tag">平台无关核心</span>
+  <span class="tag">可组合管道</span>
+  <span class="tag">插件平等</span>
+  <span class="tag">类型安全</span>
+  <span class="tag">不可变数据</span>
+</div>
+
+<div class="arch-container">
+
+  <!-- Layer 1: GUI Shell -->
+  <div class="layer l-gui">
+    <div class="layer-header">
+      <div class="layer-icon">UI</div>
+      <div class="layer-title">GUI Shell</div>
+      <div class="layer-desc">薄 React 壳 — 只做渲染，零业务逻辑</div>
+    </div>
+    <div class="layer-body">
+      <div class="module"><span class="dot"></span>Layout Manager</div>
+      <div class="module"><span class="dot"></span>Activity Bar</div>
+      <div class="module"><span class="dot"></span>Sidebar Views</div>
+      <div class="module"><span class="dot"></span>Terminal Renderer (xterm.js)</div>
+      <div class="module"><span class="dot"></span>AI Panel</div>
+      <div class="module"><span class="dot"></span>Theme Engine</div>
+    </div>
+  </div>
+
+  <div class="arrow-row"><svg viewBox="0 0 24 20"><path d="M12 2 L12 18 M6 12 L12 18 L18 12" stroke="#38bdf8" fill="none" stroke-width="2"/></svg></div>
+
+  <!-- Layer 2: Built-in Extensions -->
+  <div class="layer l-ext">
+    <div class="layer-header">
+      <div class="layer-icon">EXT</div>
+      <div class="layer-title">Extensions (内置 = 第三方，同一 API)</div>
+      <div class="layer-desc">每个扩展独立包，做一件事做好</div>
+    </div>
+    <div class="layer-body">
+      <div class="module"><span class="dot"></span>ext-terminal</div>
+      <div class="module"><span class="dot"></span>ext-ssh</div>
+      <div class="module"><span class="dot"></span>ext-sftp</div>
+      <div class="module"><span class="dot"></span>ext-ai</div>
+      <div class="module"><span class="dot"></span>ext-connections</div>
+      <div class="module"><span class="dot"></span>ext-keybindings</div>
+      <div class="module" style="border-style: dashed; opacity:0.6"><span class="dot"></span>third-party plugins ...</div>
+    </div>
+  </div>
+
+  <div class="arrow-row"><svg viewBox="0 0 24 20"><path d="M12 2 L12 18 M6 12 L12 18 L18 12" stroke="#818cf8" fill="none" stroke-width="2"/></svg></div>
+
+  <!-- Layer 3: Extension API -->
+  <div class="layer l-api">
+    <div class="layer-header">
+      <div class="layer-icon">API</div>
+      <div class="layer-title">Extension API (@terminalmind/api)</div>
+      <div class="layer-desc">公开契约 — 内置与第三方共用</div>
+    </div>
+    <div class="layer-body">
+      <div class="module"><span class="dot"></span>commands.*</div>
+      <div class="module"><span class="dot"></span>terminal.*</div>
+      <div class="module"><span class="dot"></span>connections.*</div>
+      <div class="module"><span class="dot"></span>ai.*</div>
+      <div class="module"><span class="dot"></span>fs.*</div>
+      <div class="module"><span class="dot"></span>views.*</div>
+      <div class="module"><span class="dot"></span>pipeline.*</div>
+      <div class="module"><span class="dot"></span>events.*</div>
+    </div>
+  </div>
+
+  <div class="arrow-row"><svg viewBox="0 0 24 20"><path d="M12 2 L12 18 M6 12 L12 18 L18 12" stroke="#34d399" fill="none" stroke-width="2"/></svg></div>
+
+  <!-- Layer 4: Services -->
+  <div class="layer l-svc">
+    <div class="layer-header">
+      <div class="layer-icon">SVC</div>
+      <div class="layer-title">Services (平台无关业务逻辑)</div>
+      <div class="layer-desc">纯 TypeScript — 无 Electron / Node 特有依赖</div>
+    </div>
+    <div class="layer-body">
+      <div class="module"><span class="dot"></span>TerminalService</div>
+      <div class="module"><span class="dot"></span>SSHService</div>
+      <div class="module"><span class="dot"></span>SFTPService</div>
+      <div class="module"><span class="dot"></span>AIProviderService</div>
+      <div class="module"><span class="dot"></span>PipelineService</div>
+      <div class="module"><span class="dot"></span>ConnectionStore</div>
+      <div class="module"><span class="dot"></span>ConfigService</div>
+      <div class="module"><span class="dot"></span>ExtensionHost</div>
+    </div>
+  </div>
+
+  <div class="arrow-row"><svg viewBox="0 0 24 20"><path d="M12 2 L12 18 M6 12 L12 18 L18 12" stroke="#fb923c" fill="none" stroke-width="2"/></svg></div>
+
+  <!-- Layer 5: Core -->
+  <div class="layer l-core">
+    <div class="layer-header">
+      <div class="layer-icon">CLI</div>
+      <div class="layer-title">Core CLI (@terminalmind/core)</div>
+      <div class="layer-desc">可独立运行，可 CLI 测试，零 GUI 依赖</div>
+    </div>
+    <div class="layer-body">
+      <div class="module"><span class="dot"></span>CommandRegistry</div>
+      <div class="module"><span class="dot"></span>ServiceContainer (DI)</div>
+      <div class="module"><span class="dot"></span>EventBus</div>
+      <div class="module"><span class="dot"></span>PipelineEngine</div>
+      <div class="module"><span class="dot"></span>TypedConfig</div>
+      <div class="module"><span class="dot"></span>PermissionManager</div>
+      <div class="module"><span class="dot"></span>PluginLoader</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  Monorepo: <span>pnpm workspaces</span> &nbsp;|&nbsp; 数据流: <span>单向向下</span> &nbsp;|&nbsp; 每层可独立测试
+</div>
+
+</body>
+</html>
