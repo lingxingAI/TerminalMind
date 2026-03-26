@@ -2,12 +2,17 @@
   "name": "@terminalmind/app",
   "version": "0.1.0",
   "private": true,
+  "description": "CLI-First intelligent terminal for full-stack developers",
+  "author": "TerminalMind Team",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "package": "electron-builder"
+    "package": "electron-builder",
+    "build:win": "node scripts/build-win.mjs",
+    "build:mac": "node scripts/build-mac.mjs",
+    "build:linux": "node scripts/build-linux.mjs"
   },
   "dependencies": {
     "@terminalmind/api": "workspace:*",

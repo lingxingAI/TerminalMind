@@ -2,17 +2,26 @@ appId: com.terminalmind.app
 productName: TerminalMind
 directories:
   buildResources: build
+npmRebuild: false
 files:
+  - out/**/*
+  - package.json
+  - node_modules/**/*
+  - "!node_modules/@terminalmind/**"
+  - "!node_modules/.pnpm/@terminalmind+*/**"
+  - "!**/*.d.ts"
+  - "!**/*.d.ts.map"
+  - "!**/*.ts.map"
+  - "!**/src/**"
+  - "!**/__tests__/**"
   - "!**/.vscode/*"
-  - "!src/*"
-  - "!electron.vite.config.*"
-  - "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
-  - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}"
 asarUnpack:
   - "**/*.node"
   - "**/node-pty/**"
 win:
   executableName: terminalmind
+  signingHashAlgorithms: null
+  sign: null
   target:
     - target: nsis
       arch:
