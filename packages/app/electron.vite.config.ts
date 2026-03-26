@@ -23,7 +23,7 @@ export default defineConfig({
     ],
     build: {
       rollupOptions: {
-        external: ['node-pty', 'ssh2', 'cpu-features', 'keytar', 'tar', 'worker_threads'],
+        external: ['node-pty', 'keytar', 'cpu-features'],
       },
     },
   },
