@@ -8,6 +8,7 @@ out/
 
 # Electron
 release/
+.stage/
 
 # TypeScript
 *.tsbuildinfo
