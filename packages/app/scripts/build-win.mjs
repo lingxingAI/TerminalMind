@@ -2,6 +2,7 @@ import { execSync } from 'node:child_process';
 import { rmSync, mkdirSync, cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { setTimeout as sleep } from 'node:timers/promises';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const appDir = resolve(__dirname, '..');
@@ -55,8 +56,9 @@ const electronPkg = JSON.parse(
 const electronVersion = electronPkg.version;
 console.log(`  Electron version: ${electronVersion}`);
 
+const ebVersion = pkg.devDependencies?.['electron-builder'] ?? '^25.0.0';
 const stagePkg = {
-  name: pkg.name,
+  name: 'terminalmind',
   version: pkg.version,
   private: true,
   main: pkg.main,
@@ -66,11 +68,15 @@ const stagePkg = {
   devDependencies: {
     electron: `^${electronVersion}`,
     '@electron/rebuild': '^3.0.0',
+    'electron-builder': ebVersion,
   },
 };
 writeFileSync(resolve(stageDir, 'package.json'), JSON.stringify(stagePkg, null, 2));
 
 // 4. Install dependencies via npm (not pnpm, to avoid symlinks)
+//    electron-builder is installed here so NSIS templates resolve from the
+//    short .stage/node_modules/ path instead of the very long pnpm store path
+//    that exceeds Windows MAX_PATH (260 chars).
 console.log('[3/4] Installing dependencies...');
 execSync('npm install --ignore-scripts', { cwd: stageDir, stdio: 'inherit' });
 
@@ -114,13 +120,31 @@ try {
   console.warn('  You can run terminalmind.exe directly from that directory.');
 }
 
-// Copy artifacts back
+// Copy artifacts back (retry a few times; electron-builder child processes may
+// hold handles on files briefly after exit)
 const distSrc = resolve(stageDir, 'dist');
 const distDest = resolve(appDir, 'dist');
 if (existsSync(distSrc)) {
   if (!existsSync(distDest)) mkdirSync(distDest, { recursive: true });
-  cpSync(distSrc, distDest, { recursive: true });
-  console.log(`\n✅ Build artifacts copied to: ${distDest}`);
+  let copied = false;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      cpSync(distSrc, distDest, { recursive: true });
+      copied = true;
+      break;
+    } catch (err) {
+      console.warn(`  Copy attempt ${attempt}/3 failed: ${err.message}`);
+      if (attempt < 3) {
+        console.warn('  Waiting 3s before retry...');
+        await sleep(3000);
+      }
+    }
+  }
+  if (copied) {
+    console.log(`\n✅ Build artifacts copied to: ${distDest}`);
+  } else {
+    console.warn(`\n⚠️  Could not copy artifacts. They are available at: ${distSrc}`);
+  }
 }
 
 console.log('\n=== Build Complete ===');

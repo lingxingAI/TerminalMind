@@ -89,29 +89,32 @@ function createWindow(): BrowserWindow {
     return { action: 'deny' };
   });
 
+  return mainWindow;
+}
+
+function loadRendererUrl(mainWindow: BrowserWindow): void {
   if (isDev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']);
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
-
-  return mainWindow;
 }
 
 app.whenReady().then(async () => {
   const mainWindow = createWindow();
   const userData = app.getPath('userData');
-  const secretStore = await createSecretStore();
+  const secretStore = await createSecretStore(userData);
   const connectionStore = new ConnectionStore(secretStore, userData);
   const hostKeyStore = new HostKeyStore(userData);
 
   const tmRoot = join(homedir(), '.terminalmind');
   const configService = new ConfigService(tmRoot);
   const aiSecrets = new AiSecretStore(secretStore);
+  const savedBaseUrl = configService.get('ai.baseUrl', 'https://openrouter.ai/api/v1');
   const openRouter = new OpenRouterProvider({
     id: 'openrouter',
     name: 'OpenRouter',
-    baseUrl: 'https://openrouter.ai/api/v1',
+    baseUrl: savedBaseUrl,
     getApiKey: () => aiSecrets.getApiKey('openrouter'),
   });
   const aiProviderService = new AIProviderService(eventBus);
@@ -208,6 +211,8 @@ app.whenReady().then(async () => {
   extensionHost!.registerExtension('ext-ssh', extSsh);
   extensionHost!.registerExtension('ext-sftp', extSftp);
   extensionHost!.registerExtension('ext-connections', extConnections);
+
+  loadRendererUrl(mainWindow);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

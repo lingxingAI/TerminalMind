@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { clipboard, contextBridge, ipcRenderer } from 'electron';
 import { IpcChannels, IpcEventChannels } from '@terminalmind/api';
 import type { PreloadAPI } from '@terminalmind/api';
 import type { EventType, EventPayloadMap } from '@terminalmind/core';
@@ -113,6 +113,18 @@ const api: PreloadAPI = {
   },
   local: {
     readDirectory: (absolutePath) => ipcRenderer.invoke(IpcChannels.LOCAL_READ_DIRECTORY, { absolutePath }),
+    mkdir: (absolutePath) => ipcRenderer.invoke(IpcChannels.LOCAL_MKDIR, { absolutePath }),
+    listFilesRecursive: (absolutePath) =>
+      ipcRenderer.invoke(IpcChannels.LOCAL_LIST_FILES_RECURSIVE, { absolutePath }),
+  },
+  clipboard: {
+    readText: () => clipboard.readText(),
+    writeText: (text: string) => clipboard.writeText(text),
+  },
+  dialog: {
+    saveFile: (defaultName) => ipcRenderer.invoke(IpcChannels.DIALOG_SAVE_FILE, { defaultName }),
+    openDirectory: () => ipcRenderer.invoke(IpcChannels.DIALOG_OPEN_DIRECTORY),
+    openFile: (options) => ipcRenderer.invoke(IpcChannels.DIALOG_OPEN_FILE, options),
   },
   connections: {
     list: () => ipcRenderer.invoke(IpcChannels.CONNECTIONS_LIST),
@@ -146,8 +158,8 @@ const api: PreloadAPI = {
   },
   ai: {
     complete: (request) => ipcRenderer.invoke(IpcChannels.AI_COMPLETE, request),
-    generateCommand: (prompt, context) =>
-      ipcRenderer.invoke(IpcChannels.AI_GENERATE_COMMAND, { prompt, context }),
+    generateCommand: (prompt, context, sessionId) =>
+      ipcRenderer.invoke(IpcChannels.AI_GENERATE_COMMAND, { prompt, context, sessionId }),
     streamStart: (request) => ipcRenderer.invoke(IpcChannels.AI_STREAM_START, request),
     streamCancel: (streamId) => ipcRenderer.invoke(IpcChannels.AI_STREAM_CANCEL, { streamId }),
     onStreamChunk: (callback) => {
@@ -163,6 +175,7 @@ const api: PreloadAPI = {
     setActiveProvider: (providerId) => ipcRenderer.invoke(IpcChannels.AI_SET_ACTIVE_PROVIDER, { providerId }),
     listModels: () => ipcRenderer.invoke(IpcChannels.AI_LIST_MODELS),
     setApiKey: (providerId, apiKey) => ipcRenderer.invoke(IpcChannels.AI_SET_API_KEY, { providerId, apiKey }),
+    getApiKey: (providerId) => ipcRenderer.invoke(IpcChannels.AI_GET_API_KEY, { providerId }),
     getSettings: () => ipcRenderer.invoke(IpcChannels.AI_GET_SETTINGS),
     updateSettings: (settings) => ipcRenderer.invoke(IpcChannels.AI_UPDATE_SETTINGS, settings),
     listConversations: () => ipcRenderer.invoke(IpcChannels.AI_LIST_CONVERSATIONS),

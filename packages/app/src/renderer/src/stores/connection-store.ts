@@ -23,25 +23,28 @@ function authTypeFromProfile(profile: Readonly<ConnectionProfile>): ConnectionIn
 function profileToConnectionInfo(
   profile: Readonly<ConnectionProfile>,
   sessions: readonly SSHSessionInfo[],
+  profileSessionMap: ReadonlyMap<string, string>,
 ): ConnectionInfo {
   const ssh = profile.sshConfig;
   const host = ssh?.host;
   const port = ssh?.port;
   const username = ssh?.username;
   let status: ConnectionInfo['status'] = 'disconnected';
-  if (
-    profile.type === 'ssh' &&
-    host &&
-    username !== undefined &&
-    sessions.some(
-      (s) =>
-        s.status === 'connected' &&
-        s.host === host &&
-        s.port === (port ?? 22) &&
-        s.username === username,
-    )
-  ) {
-    status = 'connected';
+  if (profile.type === 'ssh' && host && username !== undefined) {
+    const boundSessionId = profileSessionMap.get(profile.id);
+    if (
+      boundSessionId
+        ? sessions.some((s) => s.id === boundSessionId && s.status === 'connected')
+        : sessions.some(
+            (s) =>
+              s.status === 'connected' &&
+              s.host === host &&
+              s.port === (port ?? 22) &&
+              s.username === username,
+          )
+    ) {
+      status = 'connected';
+    }
   }
   return {
     id: profile.id,
@@ -65,20 +68,25 @@ interface ConnectionState {
   searchQuery: string;
   isEditorOpen: boolean;
   editingConnection: ConnectionInfo | null;
+  /** Maps connection profile ID -> SSH session ID for precise status tracking. */
+  profileSessionMap: Map<string, string>;
   setConnections(connections: ConnectionInfo[]): void;
   selectConnection(id: string | null): void;
   setSearchQuery(query: string): void;
   openEditor(connection?: ConnectionInfo): void;
   closeEditor(): void;
+  bindSession(profileId: string, sshSessionId: string): void;
+  unbindSession(profileId: string): void;
   refreshConnections(): Promise<void>;
 }
 
-export const useConnectionStore = create<ConnectionState>((set) => ({
+export const useConnectionStore = create<ConnectionState>((set, get) => ({
   connections: [],
   selectedConnectionId: null,
   searchQuery: '',
   isEditorOpen: false,
   editingConnection: null,
+  profileSessionMap: new Map(),
 
   setConnections: (connections) => set({ connections }),
 
@@ -98,6 +106,20 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
       editingConnection: null,
     }),
 
+  bindSession: (profileId, sshSessionId) => {
+    const next = new Map(get().profileSessionMap);
+    next.set(profileId, sshSessionId);
+    set({ profileSessionMap: next });
+  },
+
+  unbindSession: (profileId) => {
+    const prev = get().profileSessionMap;
+    if (!prev.has(profileId)) return;
+    const next = new Map(prev);
+    next.delete(profileId);
+    set({ profileSessionMap: next });
+  },
+
   refreshConnections: async () => {
     const profiles = await window.api.connections.list();
     let sessions: readonly SSHSessionInfo[] = [];
@@ -106,8 +128,19 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
     } catch {
       sessions = [];
     }
+    const psMap = get().profileSessionMap;
+    const activeSids = new Set(sessions.filter((s) => s.status === 'connected').map((s) => s.id));
+    let mapChanged = false;
+    const nextMap = new Map(psMap);
+    for (const [pid, sid] of nextMap) {
+      if (!activeSids.has(sid)) {
+        nextMap.delete(pid);
+        mapChanged = true;
+      }
+    }
     set({
-      connections: profiles.map((p) => profileToConnectionInfo(p, sessions)),
+      connections: profiles.map((p) => profileToConnectionInfo(p, sessions, nextMap)),
+      ...(mapChanged ? { profileSessionMap: nextMap } : {}),
     });
   },
 }));

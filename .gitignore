@@ -40,3 +40,7 @@ coverage/
 
 # pnpm
 .pnpm-store/
+.cursor/
+.specify/
+.turbo/
+docs/superpowers/

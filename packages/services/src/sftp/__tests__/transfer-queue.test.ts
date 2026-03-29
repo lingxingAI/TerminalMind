@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ISFTPChannel } from '../sftp-types';
+
+vi.mock('node:fs/promises', () => ({
+  mkdir: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { TransferQueue } from '../transfer-queue';
 
 function delay(ms: number): Promise<void> {

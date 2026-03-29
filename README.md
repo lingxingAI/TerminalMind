@@ -1,38 +1,265 @@
-<p align="center">
-  <img src="docs/assets/logo-placeholder.svg" alt="TerminalMind" width="80" />
-</p>
 
-<h1 align="center">TerminalMind</h1>
 
-<p align="center">
-  <strong>CLI-First 智能终端，面向全栈开发者</strong>
-</p>
+# TerminalMind
 
-<p align="center">
-  <a href="#功能概览">功能</a> ·
-  <a href="#快速开始">快速开始</a> ·
-  <a href="#项目结构">结构</a> ·
-  <a href="#插件开发">插件开发</a> ·
-  <a href="#技术栈">技术栈</a> ·
-  <a href="#设计原则">设计原则</a>
-</p>
+[English](#english) | [中文](#中文)
 
 ---
 
-## 功能概览
+## English
 
-| 功能 | 说明 |
-|------|------|
-| **本地终端** | 多标签本地 Shell（PowerShell / Bash / Zsh），分屏，Shell 选择器 |
-| **SSH 远程连接** | 密码 / 密钥 / Agent 认证，多跳跳板机，端口转发，连接管理树 |
-| **SFTP 文件传输** | 双面板文件浏览器，拖拽上传下载，传输队列与进度监控 |
-| **AI 命令生成** | 终端内联模式（`? <自然语言>`）+ 侧边栏多轮对话，上下文感知 |
-| **插件系统** | 完全开放的 Extension API（10 个命名空间），内置与第三方插件平等 |
-| **插件市场** | 应用内搜索安装，GitHub Registry，权限声明与沙箱隔离 |
+**CLI-First Intelligent Terminal for Full-Stack Developers**
 
-## 快速开始
+[Features](#features) · [Quick Start](#quick-start) · [Structure](#project-structure) · [Extensions](#extension-development) · [Tech Stack](#tech-stack) · [Principles](#design-principles)
 
-### 环境要求
+### Features
+
+
+| Feature            | Description                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------- |
+| **Local Terminal** | Multi-tab local shell (PowerShell / Bash / Zsh), split panes, shell selector          |
+| **SSH Remote**     | Password / Key / Agent auth, multi-hop jump hosts, port forwarding, connection tree   |
+| **SFTP Transfer**  | Dual-pane file browser, drag & drop upload/download, transfer queue with progress     |
+| **AI Commands**    | Inline mode (`? <natural language>`) + sidebar multi-turn chat, context-aware         |
+| **Plugin System**  | Fully open Extension API (10 namespaces), built-in and third-party are equal          |
+| **Marketplace**    | In-app search & install, GitHub Registry, permission declarations & sandbox isolation |
+
+
+### Quick Start
+
+#### Prerequisites
+
+- **Node.js** >= 18
+- **pnpm** >= 9
+- **Git**
+- Windows: Visual Studio Build Tools (for `node-pty` compilation)
+- macOS: Xcode Command Line Tools
+- Linux: `build-essential`, `python3`
+
+#### Install & Run
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/terminalmind.git
+cd terminalmind
+
+# Install dependencies
+pnpm install
+
+# Rebuild native modules (node-pty)
+pnpm rebuild:native
+
+# Start dev mode
+pnpm dev
+```
+
+#### Common Commands
+
+```bash
+pnpm dev            # Start Electron dev mode (HMR)
+pnpm build          # Build all packages
+pnpm test           # Run all tests (Vitest)
+pnpm test:watch     # Test watch mode
+pnpm lint           # ESLint check
+pnpm format         # Prettier format
+pnpm typecheck      # TypeScript type check
+```
+
+#### Package & Release
+
+```bash
+# Windows
+pnpm --filter @terminalmind/app build:win
+
+# macOS
+pnpm --filter @terminalmind/app build:mac
+
+# Linux
+pnpm --filter @terminalmind/app build:linux
+```
+
+### Project Structure
+
+```
+terminalmind/
+├── packages/
+│   ├── core/           # Core CLI — CommandRegistry, ServiceContainer, EventBus
+│   ├── api/            # Extension API type definitions + IPC contracts
+│   ├── services/       # Platform-agnostic business logic (no Electron dependency)
+│   │   ├── ai/         #   AIProviderService, OpenRouter, PipelineEngine
+│   │   ├── ssh/        #   SSHService, SSHSession
+│   │   ├── sftp/       #   SFTPChannel, TransferQueue
+│   │   ├── connection/ #   ConnectionStore, SecretStore
+│   │   ├── permissions/#   PermissionManager
+│   │   ├── marketplace/#   RegistryClient, MarketplaceService
+│   │   ├── extension-host/  # ExtensionHost, WorkerExtensionHost
+│   │   └── extension-api/   # 10 namespace implementations + API factory
+│   └── app/            # Electron app (Main + Preload + Renderer)
+│       ├── src/main/   #   Main process: IPC handlers, service init
+│       ├── src/preload/ #  contextBridge secure bridge
+│       └── src/renderer/#  React GUI Shell
+├── extensions/
+│   ├── ext-terminal/   # Built-in: local terminal management
+│   ├── ext-ssh/        # Built-in: SSH connections
+│   ├── ext-sftp/       # Built-in: file transfer
+│   ├── ext-connections/# Built-in: connection manager
+│   └── ext-ai/         # Built-in: AI commands + chat
+├── tools/
+│   └── create-extension/ # Extension scaffolding CLI
+├── specs/              # Phase specs, plans, task lists
+└── docs/               # Design docs, extension docs
+```
+
+#### Five-Layer Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│              GUI Shell (React)              │  ← Rendering + interaction, no business logic
+├─────────────────────────────────────────────┤
+│              Extensions                     │  ← Built-in + third-party, equal API
+├─────────────────────────────────────────────┤
+│            Extension API (10 ns)            │  ← commands / terminal / ai / fs / ...
+├─────────────────────────────────────────────┤
+│              Services                       │  ← Platform-agnostic, CLI-testable
+├─────────────────────────────────────────────┤
+│              Core CLI                       │  ← DI / EventBus / Pipeline / Registry
+└─────────────────────────────────────────────┘
+```
+
+### Extension Development
+
+#### Scaffolding
+
+```bash
+node tools/create-extension my-extension
+cd my-extension
+pnpm install && pnpm build
+```
+
+#### Entry Point
+
+```typescript
+import type { TerminalMindAPI } from '@terminalmind/api';
+
+export function activate(
+  ctx: { subscriptions: { dispose(): void }[] },
+  api: TerminalMindAPI,
+): void {
+  ctx.subscriptions.push(
+    api.commands.register('my-ext.greet', async () => {
+      api.window.showNotification('Hello from my extension!');
+    }),
+  );
+}
+
+export function deactivate(): void {}
+```
+
+#### Extension API Namespaces
+
+
+| Namespace     | Capabilities                                   |
+| ------------- | ---------------------------------------------- |
+| `commands`    | Register / execute commands                    |
+| `terminal`    | Create / manage terminal sessions              |
+| `connections` | Connection profile CRUD                        |
+| `ai`          | AI completion / streaming / register providers |
+| `fs`          | Local file read & write                        |
+| `views`       | Register sidebar / panel / status bar views    |
+| `pipeline`    | Register pipeline steps, compose execution     |
+| `events`      | Subscribe to global events                     |
+| `config`      | Read & write extension config                  |
+| `window`      | Notifications, Quick Pick, input boxes         |
+
+
+#### Permission Declarations
+
+Declare in `package.json` under `terminalmind.permissions`:
+
+
+| Permission          | Description                    |
+| ------------------- | ------------------------------ |
+| `terminal.execute`  | Execute terminal commands      |
+| `connections.read`  | Read connection profiles       |
+| `connections.write` | Modify connection profiles     |
+| `fs.read`           | Read local files               |
+| `fs.write`          | Write local files              |
+| `ai.invoke`         | Invoke AI features             |
+| `network.outbound`  | Make outbound network requests |
+
+
+Third-party extensions require user permission approval at install time; unauthorized API calls at runtime will be rejected. Built-in extensions automatically have all permissions.
+
+See [docs/extensions/README.md](docs/extensions/README.md) for detailed documentation.
+
+### Tech Stack
+
+
+| Area               | Choice                                    |
+| ------------------ | ----------------------------------------- |
+| Desktop Framework  | Electron                                  |
+| Frontend           | React 18 + Zustand                        |
+| Language           | TypeScript (strict)                       |
+| Terminal Rendering | xterm.js                                  |
+| SSH                | ssh2                                      |
+| Local PTY          | node-pty                                  |
+| AI                 | OpenRouter (OpenAI-compatible REST + SSE) |
+| Build              | electron-vite + electron-builder          |
+| Package Manager    | pnpm workspaces (Monorepo)                |
+| Testing            | Vitest                                    |
+| Code Style         | ESLint + Prettier                         |
+
+
+### Design Principles
+
+1. **Unix Philosophy** — Each module does one thing well; functionality is achieved through composition
+2. **CLI-First** — All business logic lives below the GUI; the GUI is a thin shell
+3. **Platform-Agnostic Core** — core / services have no Electron dependency, testable with pure Node.js
+4. **Composable Pipelines** — Features compose through Pipeline chaining
+5. **Extension Equality** — Built-in features use the exact same Extension API as third-party
+6. **CLI Unit Test Discipline** — Service / Command / Pipeline are all testable without the GUI
+7. **Type Safety & Immutability** — TypeScript strict + Readonly + event-driven
+
+### Testing
+
+```bash
+pnpm test
+```
+
+Current test coverage:
+
+- **19 test files, 110 tests** — Full coverage across Core / Services / Extensions
+- Services run in pure Node.js (no Electron required)
+- Covers CommandRegistry, EventBus, ServiceContainer, SSH, SFTP, Connection, AI, Pipeline, PermissionManager, ExtensionHost, Marketplace
+
+### License
+
+MIT
+
+---
+
+## 中文
+
+**CLI-First 智能终端，面向全栈开发者**
+
+[功能](#功能概览) · [快速开始](#快速开始) · [结构](#项目结构) · [插件开发](#插件开发) · [技术栈](#技术栈) · [设计原则](#设计原则)
+
+### 功能概览
+
+
+| 功能            | 说明                                                |
+| ------------- | ------------------------------------------------- |
+| **本地终端**      | 多标签本地 Shell（PowerShell / Bash / Zsh），分屏，Shell 选择器 |
+| **SSH 远程连接**  | 密码 / 密钥 / Agent 认证，多跳跳板机，端口转发，连接管理树               |
+| **SFTP 文件传输** | 双面板文件浏览器，拖拽上传下载，传输队列与进度监控                         |
+| **AI 命令生成**   | 终端内联模式（`? <自然语言>`）+ 侧边栏多轮对话，上下文感知                 |
+| **插件系统**      | 完全开放的 Extension API（10 个命名空间），内置与第三方插件平等          |
+| **插件市场**      | 应用内搜索安装，GitHub Registry，权限声明与沙箱隔离                 |
+
+
+### 快速开始
+
+#### 环境要求
 
 - **Node.js** >= 18
 - **pnpm** >= 9
@@ -41,7 +268,7 @@
 - macOS: Xcode Command Line Tools
 - Linux: `build-essential`, `python3`
 
-### 安装与运行
+#### 安装与运行
 
 ```bash
 # 克隆仓库
@@ -58,7 +285,7 @@ pnpm rebuild:native
 pnpm dev
 ```
 
-### 常用命令
+#### 常用命令
 
 ```bash
 pnpm dev            # 启动 Electron 开发模式（热更新）
@@ -70,7 +297,7 @@ pnpm format         # Prettier 格式化
 pnpm typecheck      # TypeScript 类型检查
 ```
 
-### 打包发布
+#### 打包发布
 
 ```bash
 # Windows
@@ -83,7 +310,7 @@ pnpm --filter @terminalmind/app build:mac
 pnpm --filter @terminalmind/app build:linux
 ```
 
-## 项目结构
+### 项目结构
 
 ```
 terminalmind/
@@ -115,7 +342,7 @@ terminalmind/
 └── docs/               # 设计文档、插件开发文档
 ```
 
-### 五层架构
+#### 五层架构
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -131,9 +358,9 @@ terminalmind/
 └─────────────────────────────────────────────┘
 ```
 
-## 插件开发
+### 插件开发
 
-### 脚手架创建
+#### 脚手架创建
 
 ```bash
 node tools/create-extension my-extension
@@ -141,7 +368,7 @@ cd my-extension
 pnpm install && pnpm build
 ```
 
-### 插件入口
+#### 插件入口
 
 ```typescript
 import type { TerminalMindAPI } from '@terminalmind/api';
@@ -160,56 +387,62 @@ export function activate(
 export function deactivate(): void {}
 ```
 
-### Extension API 命名空间
+#### Extension API 命名空间
 
-| 命名空间 | 能力 |
-|----------|------|
-| `commands` | 注册 / 执行命令 |
-| `terminal` | 创建 / 管理终端会话 |
-| `connections` | 连接配置 CRUD |
-| `ai` | 调用 AI 补全 / 流式 / 注册 Provider |
-| `fs` | 本地文件读写 |
-| `views` | 注册侧边栏 / 面板 / 状态栏视图 |
-| `pipeline` | 注册管道步骤、组合执行 |
-| `events` | 订阅全局事件 |
-| `config` | 读写扩展配置 |
-| `window` | 通知、Quick Pick、输入框 |
 
-### 权限声明
+| 命名空间          | 能力                          |
+| ------------- | --------------------------- |
+| `commands`    | 注册 / 执行命令                   |
+| `terminal`    | 创建 / 管理终端会话                 |
+| `connections` | 连接配置 CRUD                   |
+| `ai`          | 调用 AI 补全 / 流式 / 注册 Provider |
+| `fs`          | 本地文件读写                      |
+| `views`       | 注册侧边栏 / 面板 / 状态栏视图          |
+| `pipeline`    | 注册管道步骤、组合执行                 |
+| `events`      | 订阅全局事件                      |
+| `config`      | 读写扩展配置                      |
+| `window`      | 通知、Quick Pick、输入框           |
+
+
+#### 权限声明
 
 在 `package.json` 的 `terminalmind.permissions` 中声明：
 
-| 权限 | 说明 |
-|------|------|
-| `terminal.execute` | 执行终端命令 |
-| `connections.read` | 读取连接配置 |
-| `connections.write` | 修改连接配置 |
-| `fs.read` | 读取本地文件 |
-| `fs.write` | 写入本地文件 |
-| `ai.invoke` | 调用 AI 功能 |
-| `network.outbound` | 发起网络请求 |
+
+| 权限                  | 说明       |
+| ------------------- | -------- |
+| `terminal.execute`  | 执行终端命令   |
+| `connections.read`  | 读取连接配置   |
+| `connections.write` | 修改连接配置   |
+| `fs.read`           | 读取本地文件   |
+| `fs.write`          | 写入本地文件   |
+| `ai.invoke`         | 调用 AI 功能 |
+| `network.outbound`  | 发起网络请求   |
+
 
 第三方插件安装时用户需确认权限，运行时越权调用将被拒绝。内置扩展自动拥有所有权限。
 
 详细文档参见 [docs/extensions/README.md](docs/extensions/README.md)。
 
-## 技术栈
+### 技术栈
 
-| 领域 | 选型 |
-|------|------|
-| 桌面框架 | Electron |
-| 前端 | React 18 + Zustand |
-| 语言 | TypeScript (strict) |
-| 终端渲染 | xterm.js |
-| SSH | ssh2 |
-| 本地 PTY | node-pty |
-| AI | OpenRouter (OpenAI 兼容 REST + SSE) |
-| 构建 | electron-vite + electron-builder |
-| 包管理 | pnpm workspaces (Monorepo) |
-| 测试 | Vitest |
-| 代码规范 | ESLint + Prettier |
 
-## 设计原则
+| 领域     | 选型                                |
+| ------ | --------------------------------- |
+| 桌面框架   | Electron                          |
+| 前端     | React 18 + Zustand                |
+| 语言     | TypeScript (strict)               |
+| 终端渲染   | xterm.js                          |
+| SSH    | ssh2                              |
+| 本地 PTY | node-pty                          |
+| AI     | OpenRouter (OpenAI 兼容 REST + SSE) |
+| 构建     | electron-vite + electron-builder  |
+| 包管理    | pnpm workspaces (Monorepo)        |
+| 测试     | Vitest                            |
+| 代码规范   | ESLint + Prettier                 |
+
+
+### 设计原则
 
 1. **Unix 命令哲学** — 每个模块做一件事并做好，功能通过组合完成
 2. **CLI 优先** — 所有业务逻辑在 GUI 之下实现，GUI 是薄壳
@@ -219,7 +452,7 @@ export function deactivate(): void {}
 6. **CLI 单元测试纪律** — Service / Command / Pipeline 全部可脱离 GUI 测试
 7. **类型安全与不可变数据** — TypeScript strict + Readonly + 事件驱动
 
-## 测试
+### 测试
 
 ```bash
 pnpm test
@@ -231,16 +464,6 @@ pnpm test
 - Services 层在纯 Node.js 环境运行（无需 Electron）
 - 包含 CommandRegistry、EventBus、ServiceContainer、SSH、SFTP、Connection、AI、Pipeline、PermissionManager、ExtensionHost、Marketplace 等模块
 
-## 开发路线
-
-| Phase | 内容 | 状态 |
-|-------|------|------|
-| Phase 1 | Core Skeleton MVP | ✅ |
-| Phase 2 | SSH & 文件传输 | ✅ |
-| Phase 3 | AI 集成 | ✅ |
-| Phase 4 | 插件系统 & 市场 | ✅ |
-| Phase 5 | 打磨 & 发布 | 🔜 |
-
-## License
+### 许可证
 
 MIT

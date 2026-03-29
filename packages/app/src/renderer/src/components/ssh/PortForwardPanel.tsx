@@ -1,11 +1,13 @@
 import type { PortForwardInfo } from '@terminalmind/api';
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export interface PortForwardPanelProps {
   readonly sshSessionId: string;
 }
 
 export function PortForwardPanel({ sshSessionId }: PortForwardPanelProps): React.ReactElement {
+  const { t } = useTranslation();
   const [forwards, setForwards] = useState<readonly PortForwardInfo[]>([]);
   const [localPort, setLocalPort] = useState('');
   const [remoteHost, setRemoteHost] = useState('127.0.0.1');
@@ -31,15 +33,15 @@ export function PortForwardPanel({ sshSessionId }: PortForwardPanelProps): React
     const lp = Number.parseInt(localPort, 10);
     const rp = Number.parseInt(remotePort, 10);
     if (!Number.isFinite(lp) || lp < 1 || lp > 65535) {
-      setFormError('Invalid local port');
+      setFormError(t('ssh.portForward.errorLocalPort'));
       return;
     }
     if (!Number.isFinite(rp) || rp < 1 || rp > 65535) {
-      setFormError('Invalid remote port');
+      setFormError(t('ssh.portForward.errorRemotePort'));
       return;
     }
     if (!remoteHost.trim()) {
-      setFormError('Remote host required');
+      setFormError(t('ssh.portForward.errorRemoteHost'));
       return;
     }
     setBusy(true);
@@ -59,7 +61,7 @@ export function PortForwardPanel({ sshSessionId }: PortForwardPanelProps): React
     } finally {
       setBusy(false);
     }
-  }, [sshSessionId, localPort, remoteHost, remotePort, reload]);
+  }, [sshSessionId, localPort, remoteHost, remotePort, reload, t]);
 
   const closeForward = useCallback(
     async (forwardId: string) => {
@@ -76,10 +78,10 @@ export function PortForwardPanel({ sshSessionId }: PortForwardPanelProps): React
 
   return (
     <div className="ssh-port-forward-panel">
-      <div className="ssh-port-forward-header">Port forwards</div>
+      <div className="ssh-port-forward-header">{t('ssh.portForward.title')}</div>
       <ul className="ssh-port-forward-list">
         {forwards.length === 0 ? (
-          <li className="ssh-port-forward-empty">No active forwards</li>
+          <li className="ssh-port-forward-empty">{t('ssh.portForward.empty')}</li>
         ) : (
           forwards.map((f) => (
             <li key={f.id} className="ssh-port-forward-row">
@@ -91,7 +93,7 @@ export function PortForwardPanel({ sshSessionId }: PortForwardPanelProps): React
                 className="ssh-port-forward-close"
                 disabled={busy}
                 onClick={() => void closeForward(f.id)}
-                aria-label="Close forward"
+                aria-label={t('ssh.portForward.closeAria')}
               >
                 ×
               </button>
@@ -102,11 +104,11 @@ export function PortForwardPanel({ sshSessionId }: PortForwardPanelProps): React
       <div className="ssh-port-forward-form">
         <div className="ssh-port-forward-fields">
           <label className="ssh-port-forward-label">
-            Local
+            {t('ssh.portForward.local')}
             <input
               className="ssh-port-forward-input"
               type="number"
-              placeholder="Port"
+              placeholder={t('ssh.portForward.port')}
               value={localPort}
               onChange={(e) => setLocalPort(e.target.value)}
               min={1}
@@ -115,7 +117,7 @@ export function PortForwardPanel({ sshSessionId }: PortForwardPanelProps): React
           </label>
           <span className="ssh-port-forward-arrow">→</span>
           <label className="ssh-port-forward-label">
-            Remote host
+            {t('ssh.portForward.remoteHost')}
             <input
               className="ssh-port-forward-input ssh-port-forward-input--host"
               type="text"
@@ -124,11 +126,11 @@ export function PortForwardPanel({ sshSessionId }: PortForwardPanelProps): React
             />
           </label>
           <label className="ssh-port-forward-label">
-            Port
+            {t('ssh.portForward.port')}
             <input
               className="ssh-port-forward-input"
               type="number"
-              placeholder="Port"
+              placeholder={t('ssh.portForward.port')}
               value={remotePort}
               onChange={(e) => setRemotePort(e.target.value)}
               min={1}
@@ -138,7 +140,7 @@ export function PortForwardPanel({ sshSessionId }: PortForwardPanelProps): React
         </div>
         {formError ? <div className="ssh-port-forward-error">{formError}</div> : null}
         <button type="button" className="ssh-port-forward-add" disabled={busy} onClick={() => void addForward()}>
-          Add forward
+          {t('ssh.portForward.add')}
         </button>
       </div>
     </div>

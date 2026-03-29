@@ -1,3 +1,5 @@
+import { mkdir } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { EventEmitter } from '@terminalmind/core';
 import type { Event } from '@terminalmind/core';
 import type { ISFTPChannel, ITransferQueue, TransferTask } from './sftp-types';
@@ -180,6 +182,9 @@ export class TransferQueue implements ITransferQueue {
     });
 
     try {
+      if (task.direction === 'download') {
+        await mkdir(dirname(task.localPath), { recursive: true });
+      }
       const result =
         task.direction === 'upload'
           ? await channel.upload(task.localPath, task.remotePath)

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { SFTPFileEntry } from '@terminalmind/api';
 
 const S_IFDIR = 0o040000;
@@ -23,6 +24,24 @@ function parentPath(remotePath: string): string {
   }
   const i = trimmed.lastIndexOf('/');
   return i <= 0 ? '/' : trimmed.slice(0, i);
+}
+
+/** Directory that CRUD / upload should apply to from the current context menu target. */
+function contextTargetDir(
+  menu: { path?: string; entry?: SFTPFileEntry } | null,
+  rootPath: string,
+): string {
+  if (!menu || !menu.entry || !menu.path) {
+    return rootPath === '/' ? '/' : rootPath;
+  }
+  if (isDirectory(menu.entry.attrs)) {
+    return menu.path;
+  }
+  return parentPath(menu.path);
+}
+
+function shSingleQuoteRemote(path: string): string {
+  return `'${path.replace(/'/g, `'\\''`)}'`;
 }
 
 function formatBytes(n: number): string {
@@ -156,6 +175,7 @@ export function FileTree({
   onFileSelect,
   refreshToken = 0,
 }: FileTreeProps): React.ReactElement {
+  const { t } = useTranslation();
   const [rootEntries, setRootEntries] = useState<SFTPFileEntry[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -165,9 +185,41 @@ export function FileTree({
   const [menu, setMenu] = useState<{
     x: number;
     y: number;
-    path: string;
-    entry: SFTPFileEntry;
+    path?: string;
+    entry?: SFTPFileEntry;
   } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000);
+  }, []);
+  const [promptState, setPromptState] = useState<{
+    label: string;
+    defaultValue: string;
+    resolve: (value: string | null) => void;
+  } | null>(null);
+  const promptInputRef = useRef<HTMLInputElement>(null);
+  const showInlinePrompt = useCallback(
+    (label: string, defaultValue = ''): Promise<string | null> =>
+      new Promise((resolve) => {
+        setPromptState({ label, defaultValue, resolve });
+      }),
+    [],
+  );
+  const handlePromptSubmit = useCallback(() => {
+    if (!promptState) return;
+    const value = promptInputRef.current?.value?.trim() ?? '';
+    promptState.resolve(value || null);
+    setPromptState(null);
+  }, [promptState]);
+  const handlePromptCancel = useCallback(() => {
+    if (!promptState) return;
+    promptState.resolve(null);
+    setPromptState(null);
+  }, [promptState]);
+
   const menuRef = useRef<HTMLDivElement>(null);
 
   const loadDir = useCallback(
@@ -290,26 +342,51 @@ export function FileTree({
     setMenu({ x: e.clientX, y: e.clientY, path, entry });
   }, []);
 
-  const handleDownload = useCallback(() => {
-    if (!menu || isDirectory(menu.entry.attrs)) {
+  const handleDownload = useCallback(async () => {
+    if (!menu || !menu.entry || !menu.path || isDirectory(menu.entry.attrs)) {
       return;
     }
-    onFileSelect?.(menu.path, menu.entry);
-    closeMenu();
-  }, [menu, onFileSelect, closeMenu]);
-
-  const handleDelete = useCallback(async () => {
-    if (!menu) {
-      return;
-    }
-    const { path, entry } = menu;
-    if (!window.confirm(`Delete ${entry.filename}?`)) {
+    const localPath = await window.api.dialog.saveFile(menu.entry.filename);
+    if (!localPath) {
       closeMenu();
       return;
     }
     try {
-      if (isDirectory(entry.attrs)) {
-        await window.api.sftp.rmdir({ sessionId: sshSessionId, remotePath: path });
+      await window.api.sftp.download({
+        sessionId: sshSessionId,
+        localPath,
+        remotePath: menu.path,
+      });
+      showToast(t('sftp.fileTree.downloadSuccess', { name: menu.entry.filename }));
+    } catch (err) {
+      console.error('Download failed:', err);
+    }
+    if (menu.path && menu.entry) onFileSelect?.(menu.path, menu.entry);
+    closeMenu();
+  }, [menu, sshSessionId, onFileSelect, closeMenu, showToast, t]);
+
+  const handleDelete = useCallback(async () => {
+    if (!menu || !menu.entry || !menu.path) {
+      return;
+    }
+    const { path, entry } = menu;
+    const isDir = isDirectory(entry.attrs);
+    const msg = isDir
+      ? t('sftp.fileTree.confirmDeleteFolder', { name: entry.filename })
+      : t('sftp.fileTree.confirmDeleteFile', { name: entry.filename });
+    if (!window.confirm(msg)) {
+      closeMenu();
+      return;
+    }
+    try {
+      if (isDir) {
+        const r = await window.api.ssh.exec(
+          sshSessionId,
+          `rm -rf ${shSingleQuoteRemote(path)}`,
+        );
+        if (r.exitCode !== 0) {
+          console.error(r.stderr || r.stdout || 'rm -rf failed');
+        }
       } else {
         await window.api.sftp.unlink({ sessionId: sshSessionId, remotePath: path });
       }
@@ -318,45 +395,36 @@ export function FileTree({
       console.error(err);
     }
     closeMenu();
-  }, [menu, sshSessionId, closeMenu, refreshParent]);
+  }, [menu, sshSessionId, closeMenu, refreshParent, t]);
 
   const handleRename = useCallback(async () => {
-    if (!menu) {
+    if (!menu || !menu.entry || !menu.path) {
       return;
     }
-    const next = window.prompt('New name', menu.entry.filename);
-    if (!next || next === menu.entry.filename) {
-      closeMenu();
+    const oldName = menu.entry.filename;
+    const oldPath = menu.path;
+    closeMenu();
+    const next = await showInlinePrompt(t('sftp.fileTree.newName'), oldName);
+    if (!next || next === oldName) {
       return;
     }
-    const parent = parentPath(menu.path);
+    const parent = parentPath(oldPath);
     const newPath = joinRemote(parent === '/' ? '' : parent, next);
     const normalized = newPath.startsWith('/') ? newPath : `/${newPath}`;
     try {
       await window.api.sftp.rename({
         sessionId: sshSessionId,
-        fromPath: menu.path,
+        fromPath: oldPath,
         toPath: normalized,
       });
-      await refreshParent(menu.path);
+      await refreshParent(oldPath);
     } catch (err) {
       console.error(err);
     }
-    closeMenu();
-  }, [menu, sshSessionId, closeMenu, refreshParent]);
+  }, [menu, sshSessionId, closeMenu, refreshParent, showInlinePrompt, t]);
 
-  const handleNewFolder = useCallback(async () => {
-    const name = window.prompt('Folder name');
-    if (!name) {
-      closeMenu();
-      return;
-    }
-    const base =
-      menu?.path && isDirectory(menu.entry.attrs) ? menu.path : rootPath === '/' ? '/' : rootPath;
-    const target = joinRemote(base === '/' ? '' : base, name);
-    const normalized = target.startsWith('/') ? target : `/${target}`;
-    try {
-      await window.api.sftp.mkdir({ sessionId: sshSessionId, remotePath: normalized });
+  const refreshListingAt = useCallback(
+    async (base: string) => {
       await loadDir(base);
       if (base === rootPath) {
         const list = await window.api.sftp.list({ sessionId: sshSessionId, remotePath: rootPath });
@@ -370,21 +438,240 @@ export function FileTree({
           ),
         );
       }
+    },
+    [loadDir, rootPath, sshSessionId],
+  );
+
+  const handleNewFile = useCallback(async () => {
+    const base = contextTargetDir(menu, rootPath);
+    closeMenu();
+    const name = await showInlinePrompt(t('sftp.fileTree.fileName'));
+    if (!name) {
+      return;
+    }
+    const target = joinRemote(base === '/' ? '' : base, name);
+    const normalized = target.startsWith('/') ? target : `/${target}`;
+    try {
+      const r = await window.api.ssh.exec(sshSessionId, `touch ${shSingleQuoteRemote(normalized)}`);
+      if (r.exitCode !== 0) {
+        console.error(r.stderr || r.stdout || 'touch failed');
+      }
+      await refreshListingAt(base);
     } catch (err) {
       console.error(err);
     }
+  }, [menu, sshSessionId, rootPath, closeMenu, refreshListingAt, showInlinePrompt, t]);
+
+  const handleUpload = useCallback(async () => {
+    const base = contextTargetDir(menu, rootPath);
     closeMenu();
-  }, [menu, sshSessionId, rootPath, closeMenu, loadDir]);
+    const filePaths = await window.api.dialog.openFile({ multiple: true });
+    if (!filePaths || filePaths.length === 0) {
+      return;
+    }
+    const transferIds: string[] = [];
+    const fileNames: string[] = [];
+    for (const localPath of filePaths) {
+      const fileName = localPath.split(/[\\/]/).pop() ?? localPath;
+      fileNames.push(fileName);
+      const remotePath = joinRemote(base === '/' ? '' : base, fileName);
+      const normalized = remotePath.startsWith('/') ? remotePath : `/${remotePath}`;
+      try {
+        const { transferId } = await window.api.sftp.upload({
+          sessionId: sshSessionId,
+          localPath,
+          remotePath: normalized,
+        });
+        transferIds.push(transferId);
+      } catch (err) {
+        console.error('Upload failed:', err);
+      }
+    }
+    if (transferIds.length > 0) {
+      const waitOne = (tid: string) =>
+        new Promise<void>((resolve) => {
+          const off = window.api.sftp.onTransferComplete((r) => {
+            if (r.transferId === tid) {
+              off();
+              resolve();
+            }
+          });
+        });
+      await Promise.all(transferIds.map(waitOne));
+      showToast(t('sftp.fileTree.uploadSuccess', { count: fileNames.length }));
+    }
+    await refreshListingAt(base);
+  }, [menu, rootPath, sshSessionId, closeMenu, refreshListingAt, showToast, t]);
+
+  const handleNewFolder = useCallback(async () => {
+    const base = contextTargetDir(menu, rootPath);
+    closeMenu();
+    const name = await showInlinePrompt(t('sftp.fileTree.folderName'));
+    if (!name) {
+      return;
+    }
+    const target = joinRemote(base === '/' ? '' : base, name);
+    const normalized = target.startsWith('/') ? target : `/${target}`;
+    try {
+      await window.api.sftp.mkdir({ sessionId: sshSessionId, remotePath: normalized });
+      await refreshListingAt(base);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [menu, sshSessionId, rootPath, closeMenu, refreshListingAt, showInlinePrompt, t]);
+
+  const handleDownloadFolder = useCallback(async () => {
+    if (!menu || !menu.entry || !menu.path || !isDirectory(menu.entry.attrs)) {
+      closeMenu();
+      return;
+    }
+    const localDir = await window.api.dialog.openDirectory();
+    if (!localDir) {
+      closeMenu();
+      return;
+    }
+    const remoteFolderPath = menu.path;
+    const folderName = menu.entry.filename;
+    const localBase = `${localDir.replace(/[/\\]+$/, '')}${localDir.includes('\\') ? '\\' : '/'}${folderName}`;
+
+    try {
+      const collectFiles = async (
+        remoteDirPath: string,
+      ): Promise<{ remotePath: string; relativePath: string }[]> => {
+        const entries = await window.api.sftp.list({
+          sessionId: sshSessionId,
+          remotePath: remoteDirPath,
+        });
+        const results: { remotePath: string; relativePath: string }[] = [];
+        for (const entry of entries) {
+          const childRemote = joinRemote(remoteDirPath, entry.filename);
+          const relative = childRemote.startsWith(remoteFolderPath)
+            ? childRemote.slice(remoteFolderPath.length)
+            : `/${entry.filename}`;
+          if (isDirectory(entry.attrs)) {
+            const children = await collectFiles(childRemote);
+            results.push(...children);
+          } else {
+            results.push({ remotePath: childRemote, relativePath: relative });
+          }
+        }
+        return results;
+      };
+
+      const files = await collectFiles(remoteFolderPath);
+      const sep = localDir.includes('\\') ? '\\' : '/';
+
+      const dirsToCreate = new Set<string>();
+      for (const { relativePath } of files) {
+        const normalizedRelative = relativePath.replace(/\//g, sep);
+        const localFilePath = `${localBase}${normalizedRelative}`;
+        const localFileDir = localFilePath.slice(0, localFilePath.lastIndexOf(sep));
+        if (localFileDir) dirsToCreate.add(localFileDir);
+      }
+      for (const dir of dirsToCreate) {
+        await window.api.local.mkdir(dir);
+      }
+
+      for (const { remotePath, relativePath } of files) {
+        const normalizedRelative = relativePath.replace(/\//g, sep);
+        const localFilePath = `${localBase}${normalizedRelative}`;
+        try {
+          await window.api.sftp.download({
+            sessionId: sshSessionId,
+            localPath: localFilePath,
+            remotePath,
+          });
+        } catch (err) {
+          console.error('Download failed:', remotePath, err);
+        }
+      }
+      showToast(t('sftp.fileTree.folderDownloadSuccess', { name: folderName }));
+    } catch (err) {
+      console.error('Folder download failed:', err);
+    }
+    closeMenu();
+  }, [menu, sshSessionId, closeMenu, showToast, t]);
+
+  const handleUploadFolder = useCallback(async () => {
+    const base = contextTargetDir(menu, rootPath);
+    closeMenu();
+    const localDir = await window.api.dialog.openDirectory();
+    if (!localDir) {
+      return;
+    }
+    const folderName = localDir.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? 'folder';
+    const fileEntries = await window.api.local.listFilesRecursive(localDir);
+    if (fileEntries.length === 0) {
+      return;
+    }
+    const createdDirs = new Set<string>();
+    const transferIds: string[] = [];
+    const normalizedLocalDir = localDir.replace(/[\\/]+$/, '');
+
+    for (const { relativePath } of fileEntries) {
+      const localPath = `${normalizedLocalDir}/${relativePath}`;
+      const remoteRelative = `${folderName}/${relativePath}`;
+      const remotePath = joinRemote(base === '/' ? '' : base, remoteRelative);
+      const normalized = remotePath.startsWith('/') ? remotePath : `/${remotePath}`;
+
+      const remoteDir = parentPath(normalized);
+      if (remoteDir !== '/' && !createdDirs.has(remoteDir)) {
+        try {
+          await window.api.ssh.exec(
+            sshSessionId,
+            `mkdir -p ${shSingleQuoteRemote(remoteDir)}`,
+          );
+          createdDirs.add(remoteDir);
+        } catch {
+          /* may already exist */
+        }
+      }
+
+      try {
+        const { transferId } = await window.api.sftp.upload({
+          sessionId: sshSessionId,
+          localPath,
+          remotePath: normalized,
+        });
+        transferIds.push(transferId);
+      } catch (err) {
+        console.error('Upload failed:', err);
+      }
+    }
+
+    if (transferIds.length > 0) {
+      const waitOne = (tid: string) =>
+        new Promise<void>((resolve) => {
+          const off = window.api.sftp.onTransferComplete((r) => {
+            if (r.transferId === tid) {
+              off();
+              resolve();
+            }
+          });
+        });
+      await Promise.all(transferIds.map(waitOne));
+      showToast(t('sftp.fileTree.folderUploadSuccess'));
+    }
+    await refreshListingAt(base);
+  }, [menu, rootPath, sshSessionId, closeMenu, refreshListingAt, showToast, t]);
 
   return (
     <div className="sftp-file-tree">
       {loadError && <div className="sftp-tree-error">{loadError}</div>}
       <div className="sftp-tree-header">
-        <span className="sftp-tree-h-name">Name</span>
-        <span className="sftp-tree-h-size">Size</span>
-        <span className="sftp-tree-h-mtime">Modified</span>
+        <span className="sftp-tree-h-name">{t('sftp.fileTree.name')}</span>
+        <span className="sftp-tree-h-size">{t('sftp.fileTree.size')}</span>
+        <span className="sftp-tree-h-mtime">{t('sftp.fileTree.modified')}</span>
       </div>
-      <div className="sftp-tree-body">
+      <div
+        className="sftp-tree-body"
+        onContextMenu={(e) => {
+          if (e.target === e.currentTarget) {
+            e.preventDefault();
+            setMenu({ x: e.clientX, y: e.clientY });
+          }
+        }}
+      >
         {rootEntries.map((entry) => {
           const fullPath = joinRemote(rootPath === '/' ? '' : rootPath, entry.filename);
           const pathNorm = fullPath.startsWith('/') ? fullPath : `/${fullPath}`;
@@ -414,20 +701,70 @@ export function FileTree({
           style={{ left: menu.x, top: menu.y }}
           role="menu"
         >
-          {!isDirectory(menu.entry.attrs) && (
-            <button type="button" className="sftp-context-item" role="menuitem" onClick={handleDownload}>
-              Download
-            </button>
+          {menu.entry && (
+            <>
+              {!isDirectory(menu.entry.attrs) && (
+                <button type="button" className="sftp-context-item" role="menuitem" onClick={handleDownload}>
+                  {t('sftp.fileTree.download')}
+                </button>
+              )}
+              {isDirectory(menu.entry.attrs) && (
+                <button type="button" className="sftp-context-item" role="menuitem" onClick={handleDownloadFolder}>
+                  {t('sftp.fileTree.downloadFolder')}
+                </button>
+              )}
+              <button type="button" className="sftp-context-item" role="menuitem" onClick={handleDelete}>
+                {t('sftp.fileTree.delete')}
+              </button>
+              <button type="button" className="sftp-context-item" role="menuitem" onClick={handleRename}>
+                {t('sftp.fileTree.rename')}
+              </button>
+              <div className="sftp-context-divider" />
+            </>
           )}
-          <button type="button" className="sftp-context-item" role="menuitem" onClick={handleDelete}>
-            Delete
-          </button>
-          <button type="button" className="sftp-context-item" role="menuitem" onClick={handleRename}>
-            Rename
+          <button type="button" className="sftp-context-item" role="menuitem" onClick={handleNewFile}>
+            {t('sftp.fileTree.newFile')}
           </button>
           <button type="button" className="sftp-context-item" role="menuitem" onClick={handleNewFolder}>
-            New Folder
+            {t('sftp.fileTree.newFolder')}
           </button>
+          <button type="button" className="sftp-context-item" role="menuitem" onClick={handleUpload}>
+            {t('sftp.fileTree.uploadFile')}
+          </button>
+          <button type="button" className="sftp-context-item" role="menuitem" onClick={handleUploadFolder}>
+            {t('sftp.fileTree.uploadFolder')}
+          </button>
+        </div>
+      )}
+      {toast && (
+        <div className="sftp-toast">
+          <span className="sftp-toast-icon">✓</span>
+          <span>{toast}</span>
+        </div>
+      )}
+      {promptState && (
+        <div className="sftp-prompt-overlay" onClick={handlePromptCancel}>
+          <div className="sftp-prompt-dialog" onClick={(e) => e.stopPropagation()}>
+            <label className="sftp-prompt-label">{promptState.label}</label>
+            <input
+              ref={promptInputRef}
+              className="sftp-prompt-input"
+              defaultValue={promptState.defaultValue}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handlePromptSubmit();
+                if (e.key === 'Escape') handlePromptCancel();
+              }}
+            />
+            <div className="sftp-prompt-actions">
+              <button type="button" className="sftp-prompt-btn sftp-prompt-ok" onClick={handlePromptSubmit}>
+                {t('common.ok')}
+              </button>
+              <button type="button" className="sftp-prompt-btn" onClick={handlePromptCancel}>
+                {t('common.cancel')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

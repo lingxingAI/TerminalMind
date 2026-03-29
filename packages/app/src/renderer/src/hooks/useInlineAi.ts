@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject, type R
 import type { Terminal } from '@xterm/xterm';
 import type { AICommandContext } from '@terminalmind/api';
 
+const INLINE_AI_TIMEOUT_MS = 30_000;
+
 export type InlineAiMode = 'normal' | 'composing' | 'waiting' | 'preview';
 
 export interface UseInlineAiResult {
@@ -47,6 +49,19 @@ function eraseOneLocalChar(term: Terminal): void {
   term.write('\x08 \x08');
 }
 
+/**
+ * Check if the terminal cursor is at a shell prompt (line ends with $, #, >, %).
+ * Returns false inside interactive programs like vim, less, man, etc.
+ */
+function isAtShellPrompt(term: Terminal): boolean {
+  const buffer = term.buffer.active;
+  const line = buffer.getLine(buffer.cursorY);
+  if (!line) return false;
+  const text = line.translateToString(true, 0, buffer.cursorX).trimEnd();
+  if (!text) return false;
+  return /[$#>%]\s*$/.test(text);
+}
+
 export function useInlineAi(
   sessionId: string,
   visible: boolean,
@@ -63,6 +78,7 @@ export function useInlineAi(
   const generatedCommandRef = useRef(generatedCommand);
   const pendingQuestionMarkRef = useRef(false);
   const requestGenerationRef = useRef(0);
+  const waitingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -86,6 +102,10 @@ export function useInlineAi(
       promptRef.current = '';
       generatedCommandRef.current = '';
       atLineStartRef.current = opts?.atLineStart ?? true;
+      if (waitingTimeoutRef.current) {
+        clearTimeout(waitingTimeoutRef.current);
+        waitingTimeoutRef.current = null;
+      }
     },
     [atLineStartRef],
   );
@@ -143,6 +163,10 @@ export function useInlineAi(
       const m = modeRef.current;
 
       if (m === 'waiting') {
+        if (data === '\x1b' || data === '\x03') {
+          reset();
+          return true;
+        }
         return true;
       }
 
@@ -192,15 +216,29 @@ export function useInlineAi(
           const gen = requestGenerationRef.current;
           modeRef.current = 'waiting';
           setMode('waiting');
+
+          if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
+          waitingTimeoutRef.current = setTimeout(() => {
+            if (gen !== requestGenerationRef.current) return;
+            waitingTimeoutRef.current = null;
+            setError('AI request timed out.');
+            modeRef.current = 'composing';
+            setMode('composing');
+          }, INLINE_AI_TIMEOUT_MS);
+
           void (async () => {
             try {
               const context = await buildContext(sessionId);
               if (gen !== requestGenerationRef.current) {
                 return;
               }
-              const result = await window.api.ai.generateCommand(p, context);
+              const result = await window.api.ai.generateCommand(p, context, sessionId);
               if (gen !== requestGenerationRef.current) {
                 return;
+              }
+              if (waitingTimeoutRef.current) {
+                clearTimeout(waitingTimeoutRef.current);
+                waitingTimeoutRef.current = null;
               }
               if (!result.command?.trim()) {
                 setError('No command was generated.');
@@ -215,6 +253,10 @@ export function useInlineAi(
             } catch (e) {
               if (gen !== requestGenerationRef.current) {
                 return;
+              }
+              if (waitingTimeoutRef.current) {
+                clearTimeout(waitingTimeoutRef.current);
+                waitingTimeoutRef.current = null;
               }
               const msg = e instanceof Error ? e.message : String(e);
               setError(msg);
@@ -281,7 +323,7 @@ export function useInlineAi(
         return true;
       }
 
-      if (atLineStartRef.current) {
+      if (atLineStartRef.current && isAtShellPrompt(term)) {
         if (data === '?') {
           pendingQuestionMarkRef.current = true;
           term.write('?');

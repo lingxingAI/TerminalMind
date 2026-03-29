@@ -160,12 +160,18 @@ terminalmind/
 │       │   ├── main/          # Electron main process
 │       │   ├── renderer/      # React renderer
 │       │   │   ├── components/
-│       │   │   │   ├── layout/
-│       │   │   │   ├── terminal/
-│       │   │   │   ├── sidebar/
-│       │   │   │   └── ai-panel/
+│       │   │   │   ├── layout/         # Toolbar, ActivityBar, Sidebar, TabBar, PanelArea, StatusBar
+│       │   │   │   ├── terminal/       # TerminalPane, InlineAiOverlay
+│       │   │   │   ├── connections/    # ConnectionTree, ConnectionEditor
+│       │   │   │   ├── sftp/           # SftpView (双栏文件管理器)
+│       │   │   │   ├── ai/             # AiSidebarPanel, AiSettingsForm
+│       │   │   │   ├── search/         # SearchPanel
+│       │   │   │   ├── extensions/     # ExtensionsSidebarPanel, MarketplaceView
+│       │   │   │   ├── settings/       # SettingsView
+│       │   │   │   └── command-palette/ # CommandPalette
 │       │   │   ├── hooks/
-│       │   │   ├── stores/
+│       │   │   ├── stores/             # layout-store (LayoutState), connection-store, etc.
+│       │   │   ├── styles/             # global.css (CSS 变量主题), theme.css
 │       │   │   └── App.tsx
 │       │   └── preload/
 │       └── package.json
@@ -637,32 +643,144 @@ AI 命令生成。提供两种交互模式：
 
 ## 9 GUI Shell
 
-### 9.1 布局系统（VS Code 风格）
+> 完整交互原型见 `docs/superpowers/specs/2026-03-25-terminalmind-ux-design.html`
+
+### 9.1 布局系统
 
 ```
-┌──────┬──────────────────────────────────┐
-│ Act  │           Toolbar                │
-│ Bar  ├──────────┬───────────────────────┤
-│      │ Sidebar  │    Main Work Area     │
-│ ◈    │          │  ┌─────┬─────┐       │
-│ ◈    │  Tree    │  │Tab1 │Tab2 │       │
-│ ◈    │  View    │  ├─────┴─────┤       │
-│ ◈    │          │  │           │       │
-│ ◈    │          │  │ Terminal  │       │
-│      │          │  │           │       │
-│      │          │  │           │       │
-│      ├──────────┴──┴───────────┘       │
-│      │         Panel (AI / Output)      │
-└──────┴──────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  🔴 🟡 🟢      [ 🔍 Command Palette...  Ctrl+Shift+P ] │  Toolbar (38px)
+├──────┬───────────┬───────────────────────────────────────┤
+│      │           │ [Tab1] [Tab2] [Tab3]          [× ]   │  Tab Bar (35px)
+│ Act  │  Sidebar  ├──────────────────────────────────────┤
+│ Bar  │           │                                      │
+│      │  260px    │           Main View                  │
+│ 48px │  ~320px   │                                      │
+│      │           │  Terminal / SFTP / Marketplace        │
+│ ◈ ◈  │  动态切换  │           / Settings                 │
+│ ◈ ◈  │           ├──────────────────────────────────────┤
+│ ◈    │           │ [AI Chat] [Output] [Problems ③]  ▾  │  Panel (260px, 可折叠)
+│ ─    │           │  对话 / 日志 / 告警                    │
+│ ◈    │           │                                      │
+├──────┴───────────┴──────────────────────────────────────┤
+│ ⚡ SSH Connected │ bash │ UTF-8     claude-4-sonnet  82% │  Status Bar (24px)
+└──────────────────────────────────────────────────────────┘
 ```
 
-- **Activity Bar（左侧）：** 图标按钮切换侧边栏视图（连接、文件、搜索、扩展、AI）
-- **Sidebar（左面板）：** 当前活动视图（连接树、文件浏览器等）
-- **Main Work Area（中央）：** 多标签终端，支持水平/垂直分屏
-- **Panel（底部）：** 可折叠面板区，放置 AI 对话、输出日志等
-- **Toolbar（顶部）：** 快速连接、命令面板入口
+#### Toolbar（顶部标题栏，38px）
 
-### 9.2 组件架构
+- **Traffic Lights**（macOS 风格窗口控制按钮）：位于窗口最顶部左侧，红/黄/绿 = 关闭/最小化/最大化
+- **Command Palette 搜索框**：居中显示，点击或 `Ctrl+Shift+P` 打开命令面板
+- 标题栏区域可拖拽移动窗口（`-webkit-app-region: drag`）
+
+#### Activity Bar（左侧活动栏，48px）
+
+点击图标切换侧边栏面板和主视图，完整映射关系：
+
+| 图标 | 面板 ID | 侧边栏内容 | 主视图 | 侧边栏宽度 |
+|------|---------|-----------|--------|-----------|
+| `dns` | connections | 连接树（分组 → 连接项，状态点 + IP） | Terminal | 260px |
+| `folder` | sftp | SFTP 会话列表 | SFTP 双栏文件管理器 | 200px |
+| `search` | search | 搜索输入 + 正则/大小写过滤 + 匹配结果 | Terminal（不变） | 260px |
+| `smart_toy` | ai | AI 对话侧边栏（多轮对话 + 模型切换） | Terminal（不变） | 320px |
+| `extension` | extensions | **隐藏侧边栏** | Marketplace 扩展市场 | — |
+| `settings` | settings | **隐藏侧边栏** | Settings 设置页 | — |
+
+底部 spacer 将 Settings 图标推到活动栏最下方。当前活动项左侧有 2px 蓝色指示条。
+
+#### Sidebar（侧边栏，动态宽度）
+
+根据 Activity Bar 选择在 4 个面板间切换（Extensions / Settings 时整个侧边栏隐藏）：
+
+- **Connections Panel**：树形分组视图（Production / Staging / Local），连接项显示状态点（绿=已连接、灰=断开、红=错误）+ 图标 + 名称 + IP。Header 带新建/刷新/更多按钮
+- **SFTP Panel**：SFTP 会话列表，显示连接状态
+- **Search Panel**：搜索输入框 + 过滤按钮（正则 `.*` / 大小写 `Aa` / 全词匹配 `W`）+ 按终端分组的匹配结果，高亮命中关键词
+- **AI Panel**：完整 AI 对话界面（消息列表 + 代码块 + 发送到终端按钮 + 底部输入栏 + 模型选择下拉）
+
+面板切换时侧边栏宽度平滑过渡（`transition: width 0.2s`）。
+
+#### Main View（主内容区，4 种互斥视图）
+
+| 视图 | 触发面板 | 内容结构 |
+|------|---------|---------|
+| **Terminal** | connections / search / ai | Tab Bar + Terminal Panes + Bottom Panel |
+| **SFTP** | sftp | Tab Bar + 双栏文件管理器（Local ↔ Remote）+ 传输状态栏 |
+| **Marketplace** | extensions | 搜索框 + 标签过滤 + 扩展卡片网格（6 列自适应） |
+| **Settings** | settings | 设置导航栏（200px）+ 设置内容区（分 section 布局） |
+
+**Terminal View 详细结构：**
+
+- **Tab Bar（35px）：** 多标签，可切换/关闭。图标区分类型：SSH 绿色 `terminal` / Local 蓝色 `laptop` / SFTP 橙色 `folder_shared`。活动标签底部有 1px 蓝色指示线
+- **Terminal Pane：** 每个标签对应独立终端面板（`xterm.js` 渲染）。使用 JetBrains Mono 等宽字体，深色背景
+- **AI Inline Overlay：** 终端内输入 `? <自然语言>` 时弹出 AI 建议浮层，显示生成的命令，Enter 执行 / Tab 编辑 / Esc 取消
+
+**SFTP View 详细结构：**
+
+- 左面板（LOCAL）：本地文件列表，Header 显示蓝色 LOCAL 标签 + 路径
+- 右面板（REMOTE）：远程文件列表，Header 显示绿色 REMOTE 标签 + 路径
+- 中间：上传（→）/ 下载（←）按钮
+- 底部：传输状态栏（进度条 + 速度 + ETA）
+
+#### Bottom Panel（底部面板，260px，可折叠）
+
+3 个子标签页，带右侧折叠/关闭按钮：
+
+| 标签 | 内容 |
+|------|------|
+| **AI Chat** | 对话式 AI 助手，支持代码块渲染、"Send to Terminal" 按钮、模型选择、消息历史 |
+| **Output** | 系统日志（带时间戳）：连接状态、Shell 检测、扩展加载、SFTP 传输、告警 |
+| **Problems** | 问题列表：磁盘告警（黄色 warning）、连接超时（红色 error）、证书过期（黄色 warning） |
+
+折叠时面板高度收缩到 32px（仅显示标签栏）。
+
+#### Status Bar（底部状态栏，24px）
+
+根据当前活动主视图切换状态信息：
+
+| 主视图 | 左侧 | 右侧 |
+|--------|------|------|
+| Terminal | SSH 连接状态 + Shell 类型 + 编码 | AI 模型 + CPU 占用 + 磁盘占用 |
+| SFTP | SFTP 连接状态 + 传输数 | 传输速度 |
+| Marketplace | 已安装扩展数 | 可用更新数 |
+| Settings | "Settings" 标签 | — |
+
+### 9.2 交互系统
+
+#### Command Palette（命令面板）
+
+- **触发方式：** 点击 Toolbar 搜索框 / `Ctrl+Shift+P`
+- **行为：** 模态覆盖层 + 毛玻璃背景，输入框自动聚焦
+- **搜索过滤：** 实时过滤命令列表，匹配命令名称
+- **键盘导航：** `↑/↓` 选择 → `Enter` 执行 → `Esc` 关闭
+- **命令项：** 图标 + 命令标签 + 快捷键/分类标签
+
+预置命令包括：SSH 连接/断开/端口转发、SFTP 打开、AI 切换、面板控制、扩展市场、设置、终端新建/分屏、主题切换、配置导入等。
+
+#### New Connection 对话框
+
+- **触发方式：** Connections 侧边栏 "+" 按钮 / `Ctrl+N` / Command Palette
+- **表单字段：** 连接名称、分组（下拉）、Host + Port（双列）、用户名、认证方式（密码/密钥/SSH Agent 三选一 Tab 切换）、私钥路径（含浏览按钮）、跳板机（下拉选择已有连接）
+- **底部操作：** 测试连接 / 取消 / 保存并连接
+
+#### 键盘快捷键
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Ctrl+Shift+P` | 打开/关闭 Command Palette |
+| `Ctrl+N` | 新建连接对话框 |
+| `Ctrl+L` | 切换到 AI 侧边栏 |
+| `Ctrl+J` | 展开/折叠底部面板 |
+| `Ctrl+,` | 打开设置 |
+| `Ctrl+1` ~ `Ctrl+6` | 快速切换活动栏面板（Connections → Settings） |
+| `Esc` | 关闭当前覆盖层（Command Palette / 对话框） |
+
+#### 连接树交互
+
+- 点击连接项 → 高亮选中 + 自动切换到对应终端标签
+- 分组 Header 可折叠/展开
+- 连接状态实时更新（通过 EventBus 事件驱动）
+
+### 9.3 组件架构
 
 GUI Shell 内部为纯 React 组件，通过 IPC Bridge 调用 Main Process 的 Extension API：
 
@@ -670,9 +788,22 @@ GUI Shell 内部为纯 React 组件，通过 IPC Bridge 调用 Main Process 的 
 React Component → useTerminalMindAPI() hook → IPC Bridge → Main Process → Extension API → Service
 ```
 
-组件不直接持有业务状态。通过 Zustand Store 管理 UI 状态（标签顺序、面板大小等），业务状态通过事件订阅从 Main Process 同步。
+组件不直接持有业务状态。通过 Zustand Store 管理 UI 状态（标签顺序、面板大小、活动面板等），业务状态通过事件订阅从 Main Process 同步。
 
-### 9.3 主题系统
+主要 UI Store 状态：
+
+```typescript
+interface LayoutState {
+  readonly activePanel: 'connections' | 'sftp' | 'search' | 'ai' | 'extensions' | 'settings';
+  readonly activeTab: number;
+  readonly activePanelTab: 'ai-chat' | 'output' | 'problems';
+  readonly panelExpanded: boolean;
+  readonly commandPaletteOpen: boolean;
+  readonly newConnectionDialogOpen: boolean;
+}
+```
+
+### 9.4 主题系统
 
 内置暗色/亮色主题，支持插件注册自定义主题：
 
@@ -685,6 +816,22 @@ interface Theme {
   readonly terminal: Readonly<TerminalTheme>;
 }
 ```
+
+默认暗色主题 CSS 变量定义（参见 UX 原型）：
+
+| 变量 | 值 | 用途 |
+|------|-----|------|
+| `--bg-deep` | `#080b12` | 终端背景 |
+| `--bg` | `#0d1117` | 基础背景（Toolbar/Activity Bar/Tab Bar） |
+| `--bg-elevated` | `#161b22` | 浮起表面（Sidebar/Panel/Dialog） |
+| `--surface` | `#1c2333` | 控件表面（输入框/卡片） |
+| `--accent` | `#58a6ff` | 主强调色 |
+| `--green` | `#3fb950` | SSH 连接/成功状态 |
+| `--orange` | `#f0883e` | SFTP/警告 |
+| `--red` | `#f85149` | 错误/关闭 |
+| `--yellow` | `#e3b341` | 代码高亮/AI 命令 |
+| `--font-mono` | JetBrains Mono | 终端/代码字体 |
+| `--font-sans` | Noto Sans SC | UI 字体 |
 
 ---
 
@@ -808,10 +955,11 @@ connections.filter(tag='production')
 - Core CLI（CommandRegistry、DI、EventBus）
 - Extension API 最小子集：`activate/deactivate` 生命周期、`commands.register`、`views.registerSidebarView`。内置扩展从第一天起使用此子集注册，后续 Phase 只扩充 API 表面积，不改变接入方式
 - TerminalService + ext-terminal（本地多标签终端，作为首个内置扩展验证 API）
-- GUI Shell 基础布局（Activity Bar、Sidebar、标签栏、终端渲染）
-- 基础主题（暗色）
+- GUI Shell 基础布局（Toolbar + Activity Bar + Sidebar + Tab Bar + Terminal + Bottom Panel + Status Bar）
+- 交互系统（Command Palette、键盘快捷键）
+- 基础暗色主题（CSS 变量体系）
 
-**交付物：** 一个可以打开多标签本地终端的 Electron 应用。内置扩展已走 Extension API 最小子集注册。
+**交付物：** 一个可以打开多标签本地终端的 Electron 应用。完整布局框架就位，内置扩展已走 Extension API 最小子集注册。
 
 > **决策说明：** Phase 1 即建立扩展注册的唯一路径。Phase 4 的工作是补全 API 命名空间、加入 Worker 隔离和 PermissionManager 以支持第三方插件，而非重构内置扩展的接入方式。
 
@@ -820,30 +968,32 @@ connections.filter(tag='production')
 - SSHService + ext-ssh
 - SFTPService + ext-sftp
 - ConnectionStore + ext-connections
-- 侧边栏连接树视图
-- 文件浏览器面板
+- 侧边栏 Connections Panel（分组连接树 + 状态指示）
+- 侧边栏 SFTP Panel + SFTP 双栏文件管理器（Main View）
+- New Connection 对话框
 
-**交付物：** 可以管理 SSH 连接、远程终端、文件上传下载。
+**交付物：** 可以管理 SSH 连接、远程终端、文件上传下载。Activity Bar 的 Connections/Files 面板可用。
 
 ### Phase 3：AI 集成
 
 - AIProviderService + OpenRouter Provider
-- ext-ai（终端内联模式 + 侧边栏对话模式）
+- ext-ai（终端 AI Inline Overlay + AI 侧边栏 Panel + Bottom Panel AI Chat）
 - AI 上下文注入（Shell 类型、OS、CWD、最近命令）
 - PipelineEngine + AI 命令生成管道
+- 侧边栏 Search Panel（终端历史搜索 + 过滤）
 
-**交付物：** 自然语言生成命令并执行，AI 对话面板。
+**交付物：** 自然语言生成命令并执行，三种 AI 交互模式（Inline / Sidebar / Bottom Panel）。Activity Bar 的 AI/Search 面板可用。
 
 ### Phase 4：插件系统 & 市场
 
 - Extension API 完整实现
 - Extension Host（Worker 隔离）
 - PermissionManager
-- 插件市场 UI（搜索、安装、卸载）
+- Marketplace Main View（搜索 + 标签过滤 + 扩展卡片网格 + Install/Installed 切换）
 - GitHub Registry 机制
 - 插件开发文档 & 脚手架
 
-**交付物：** 第三方可以开发和分发插件。
+**交付物：** 第三方可以开发和分发插件。Activity Bar 的 Extensions 面板可用。
 
 ### Phase 5：打磨 & 发布
 

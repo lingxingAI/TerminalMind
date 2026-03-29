@@ -1,13 +1,14 @@
 import type { Permission } from '@terminalmind/api';
 
-export const PERMISSION_DESCRIPTIONS: Record<Permission, string> = {
-  'terminal.execute': 'Execute commands in terminal',
-  'connections.read': 'Read connection profiles',
-  'connections.write': 'Modify connection profiles',
-  'fs.read': 'Read files on your computer',
-  'fs.write': 'Write files on your computer',
-  'ai.invoke': 'Use AI features',
-  'network.outbound': 'Make network requests',
+/** i18n keys under `extensions.permission.*` — use `t(PERMISSION_LABEL_KEYS[p])` */
+export const PERMISSION_LABEL_KEYS: Record<Permission, string> = {
+  'terminal.execute': 'extensions.permission.terminalExecute',
+  'connections.read': 'extensions.permission.connectionsRead',
+  'connections.write': 'extensions.permission.connectionsWrite',
+  'fs.read': 'extensions.permission.fsRead',
+  'fs.write': 'extensions.permission.fsWrite',
+  'ai.invoke': 'extensions.permission.aiInvoke',
+  'network.outbound': 'extensions.permission.networkOutbound',
 };
 
 export function permissionIcon(permission: Permission): string {

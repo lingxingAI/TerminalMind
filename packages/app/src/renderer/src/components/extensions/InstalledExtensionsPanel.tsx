@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { InstalledExtension } from '@terminalmind/api';
 
 export function InstalledExtensionsPanel(): React.ReactElement {
+  const { t } = useTranslation();
   const [list, setList] = useState<InstalledExtension[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -12,9 +14,9 @@ export function InstalledExtensionsPanel(): React.ReactElement {
       const next = await window.api.extensions.list();
       setList(next);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to list extensions');
+      setError(e instanceof Error ? e.message : t('extensions.installed.listError'));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void refresh();
@@ -93,13 +95,13 @@ export function InstalledExtensionsPanel(): React.ReactElement {
     <div className="installed-extensions-panel">
       <div className="installed-extensions-toolbar">
         <button type="button" className="marketplace-link-btn" onClick={openFolder}>
-          Open extensions folder
+          {t('extensions.installed.openFolder')}
         </button>
       </div>
       {error ? <div className="marketplace-error installed-extensions-error">{error}</div> : null}
 
       <section className="installed-extensions-section">
-        <h3 className="installed-extensions-section-title">Built-in</h3>
+        <h3 className="installed-extensions-section-title">{t('extensions.installed.builtIn')}</h3>
         <ul className="installed-extensions-list">
           {builtins.map((ext) => (
             <li key={ext.id} className="installed-extensions-row">
@@ -109,16 +111,16 @@ export function InstalledExtensionsPanel(): React.ReactElement {
                   {ext.manifest.name} · v{ext.manifest.version}
                 </div>
               </div>
-              <span className="marketplace-badge muted">Built-in</span>
+              <span className="marketplace-badge muted">{t('extensions.installed.builtInBadge')}</span>
             </li>
           ))}
         </ul>
       </section>
 
       <section className="installed-extensions-section">
-        <h3 className="installed-extensions-section-title">Installed</h3>
+        <h3 className="installed-extensions-section-title">{t('extensions.installed.userInstalled')}</h3>
         {user.length === 0 ? (
-          <p className="marketplace-muted">No marketplace extensions installed.</p>
+          <p className="marketplace-muted">{t('extensions.installed.emptyUser')}</p>
         ) : (
           <ul className="installed-extensions-list">
             {user.map((ext) => (
@@ -136,7 +138,7 @@ export function InstalledExtensionsPanel(): React.ReactElement {
                     disabled={busyId === ext.id}
                     onChange={() => void toggle(ext)}
                   />
-                  <span>{ext.enabled ? 'On' : 'Off'}</span>
+                  <span>{ext.enabled ? t('extensions.installed.on') : t('extensions.installed.off')}</span>
                 </label>
                 <button
                   type="button"
@@ -144,7 +146,7 @@ export function InstalledExtensionsPanel(): React.ReactElement {
                   disabled={busyId === ext.id}
                   onClick={() => void checkUpdate(ext)}
                 >
-                  Check updates
+                  {t('extensions.installed.checkUpdates')}
                 </button>
                 <button
                   type="button"
@@ -152,7 +154,7 @@ export function InstalledExtensionsPanel(): React.ReactElement {
                   disabled={busyId === ext.id}
                   onClick={() => void uninstall(ext)}
                 >
-                  Uninstall
+                  {t('extensions.installed.uninstall')}
                 </button>
               </li>
             ))}

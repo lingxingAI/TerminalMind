@@ -47,6 +47,7 @@ export const IpcChannels = {
   AI_SET_ACTIVE_PROVIDER: 'ai:setActiveProvider',
   AI_LIST_MODELS: 'ai:listModels',
   AI_SET_API_KEY: 'ai:setApiKey',
+  AI_GET_API_KEY: 'ai:getApiKey',
   AI_GET_SETTINGS: 'ai:getSettings',
   AI_UPDATE_SETTINGS: 'ai:updateSettings',
   AI_LIST_CONVERSATIONS: 'ai:listConversations',
@@ -63,6 +64,11 @@ export const IpcChannels = {
   EXTENSION_GET_PERMISSIONS: 'extension:getPermissions',
   EXTENSION_REVOKE_PERMISSION: 'extension:revokePermission',
   PERMISSION_PROMPT_RESULT: 'permission:promptResult',
+  DIALOG_SAVE_FILE: 'dialog:saveFile',
+  DIALOG_OPEN_DIRECTORY: 'dialog:openDirectory',
+  DIALOG_OPEN_FILE: 'dialog:openFile',
+  LOCAL_MKDIR: 'local:mkdir',
+  LOCAL_LIST_FILES_RECURSIVE: 'local:listFilesRecursive',
 } as const;
 
 export const IpcEventChannels = {

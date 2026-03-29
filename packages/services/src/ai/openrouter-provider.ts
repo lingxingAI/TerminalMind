@@ -135,12 +135,22 @@ function mapChatCompletionResponse(json: Record<string, unknown>): AICompletionR
 }
 
 export class OpenRouterProvider implements AIProvider {
-  private readonly normalizedBase: string;
+  private normalizedBase: string;
   private _models: AIModelInfo[] = [];
   private modelsCache: { readonly expiresAt: number; readonly models: readonly AIModelInfo[] } | null = null;
 
   constructor(private readonly options: Readonly<OpenRouterProviderOptions>) {
     this.normalizedBase = normalizeBaseUrl(options.baseUrl);
+  }
+
+  setBaseUrl(url: string): void {
+    this.normalizedBase = normalizeBaseUrl(url);
+    this.modelsCache = null;
+    this._models = [];
+  }
+
+  getBaseUrl(): string {
+    return this.normalizedBase;
   }
 
   get id(): string {

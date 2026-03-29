@@ -390,6 +390,7 @@ export interface ConversationInfo {
 
 export interface AISettings {
   readonly activeProviderId: string;
+  readonly baseUrl: string;
   readonly defaultModel: string;
   readonly temperature: number;
   readonly maxTokens: number;
@@ -471,6 +472,17 @@ export interface PreloadAPI {
   };
   local: {
     readDirectory(absolutePath: string): Promise<readonly LocalDirEntry[]>;
+    mkdir(absolutePath: string): Promise<void>;
+    listFilesRecursive(absolutePath: string): Promise<readonly { relativePath: string; size: number }[]>;
+  };
+  clipboard: {
+    readText(): string;
+    writeText(text: string): void;
+  };
+  dialog: {
+    saveFile(defaultName: string): Promise<string | null>;
+    openDirectory(): Promise<string | null>;
+    openFile(options?: { multiple?: boolean }): Promise<string[] | null>;
   };
   ai: {
     complete(request: AICompletionRequest): Promise<AICompletionResponse>;
@@ -485,6 +497,7 @@ export interface PreloadAPI {
     setActiveProvider(providerId: string): Promise<void>;
     listModels(): Promise<AIModelInfo[]>;
     setApiKey(providerId: string, apiKey: string): Promise<void>;
+    getApiKey(providerId: string): Promise<string | null>;
     getSettings(): Promise<AISettings>;
     updateSettings(settings: Partial<AISettings>): Promise<void>;
     listConversations(): Promise<ConversationInfo[]>;

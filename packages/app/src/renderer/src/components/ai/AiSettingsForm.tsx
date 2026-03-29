@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { AIModelInfo, AISettings } from '@terminalmind/api';
 
 const OPENROUTER_ID = 'openrouter';
@@ -9,6 +10,7 @@ export interface AiSettingsFormProps {
 }
 
 export function AiSettingsForm({ open, onClose }: AiSettingsFormProps): React.ReactElement | null {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +21,7 @@ export function AiSettingsForm({ open, onClose }: AiSettingsFormProps): React.Re
 
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
-  const [activeProviderId, setActiveProviderId] = useState(OPENROUTER_ID);
+  const [baseUrl, setBaseUrl] = useState('https://openrouter.ai/api/v1');
   const [defaultModel, setDefaultModel] = useState('openai/gpt-4o-mini');
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(2048);
@@ -53,7 +55,7 @@ export function AiSettingsForm({ open, onClose }: AiSettingsFormProps): React.Re
         if (cancelled) {
           return;
         }
-        setActiveProviderId(s.activeProviderId);
+        setBaseUrl(s.baseUrl || 'https://openrouter.ai/api/v1');
         setDefaultModel(s.defaultModel);
         setTemperature(s.temperature);
         setMaxTokens(s.maxTokens);
@@ -94,7 +96,7 @@ export function AiSettingsForm({ open, onClose }: AiSettingsFormProps): React.Re
     setError(null);
     try {
       const patch: Partial<AISettings> = {
-        activeProviderId,
+        baseUrl: baseUrl.trim(),
         defaultModel,
         temperature,
         maxTokens,
@@ -107,7 +109,6 @@ export function AiSettingsForm({ open, onClose }: AiSettingsFormProps): React.Re
       if (apiKey.trim().length > 0) {
         await window.api.ai.setApiKey(OPENROUTER_ID, apiKey.trim());
       }
-      await window.api.ai.setActiveProvider(activeProviderId);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -142,58 +143,67 @@ export function AiSettingsForm({ open, onClose }: AiSettingsFormProps): React.Re
         onPointerDown={(e) => e.stopPropagation()}
       >
         <div className="ai-settings-header">
-          <h2 id="ai-settings-title">AI settings</h2>
-          <button type="button" className="ai-settings-close" onClick={onClose} aria-label="Close">
+          <h2 id="ai-settings-title">{t('ai.settings.title')}</h2>
+          <button type="button" className="ai-settings-close" onClick={onClose} aria-label={t('common.close')}>
             ×
           </button>
         </div>
 
         <div className="ai-settings-body">
           {loading ? (
-            <div className="ai-settings-loading">Loading…</div>
+            <div className="ai-settings-loading">{t('ai.settings.loading')}</div>
           ) : (
             <>
               {error ? <div className="ai-settings-error">{error}</div> : null}
 
               <label className="ai-settings-label">
-                Provider
-                <select
-                  className="ai-settings-select"
-                  value={activeProviderId}
-                  onChange={(e) => setActiveProviderId(e.target.value)}
-                >
-                  <option value={OPENROUTER_ID}>OpenRouter</option>
-                </select>
+                {t('ai.settings.endpoint')}
+                <input
+                  className="ai-settings-input"
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                  placeholder={t('ai.settings.endpointPlaceholder')}
+                  spellCheck={false}
+                />
               </label>
 
               <label className="ai-settings-label">
-                API key
-                <div className="ai-settings-key-row">
+                {t('ai.settings.apiKey')}
+                <div className="input-with-action">
                   <input
                     className="ai-settings-input"
                     type={showKey ? 'text' : 'password'}
                     autoComplete="off"
-                    placeholder="Leave blank to keep existing key"
+                    placeholder={t('ai.settings.apiKeyPlaceholder')}
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                   />
                   <button
                     type="button"
-                    className="ai-settings-toggle-key"
-                    onClick={() => setShowKey((v) => !v)}
+                    className="input-action-btn"
+                    onClick={async () => {
+                      if (!showKey && !apiKey) {
+                        try {
+                          const real = await window.api.ai.getApiKey(OPENROUTER_ID);
+                          if (real) setApiKey(real);
+                        } catch { /* ignore */ }
+                      }
+                      setShowKey((v) => !v);
+                    }}
+                    title={showKey ? t('ai.settings.hideKey') : t('ai.settings.showKey')}
                   >
-                    {showKey ? 'Hide' : 'Show'}
+                    <span className="material-symbols-rounded">{showKey ? 'visibility_off' : 'visibility'}</span>
                   </button>
                 </div>
               </label>
 
-              <label className="ai-settings-label">
-                Default model
+              <div className="ai-settings-label">
+                <span>{t('ai.settings.defaultModel')}</span>
                 <div className="ai-model-dropdown">
                   <input
                     type="text"
                     className="ai-settings-input"
-                    placeholder={modelsLoading ? 'Loading models…' : 'Search models…'}
+                    placeholder={modelsLoading ? t('ai.settings.modelsLoading') : t('ai.settings.modelsSearch')}
                     value={modelMenuOpen ? modelQuery : selectedModelLabel}
                     onChange={(e) => {
                       setModelQuery(e.target.value);
@@ -203,13 +213,19 @@ export function AiSettingsForm({ open, onClose }: AiSettingsFormProps): React.Re
                       setModelMenuOpen(true);
                       setModelQuery('');
                     }}
+                    onBlur={(e) => {
+                      if (!e.currentTarget.closest('.ai-model-dropdown')?.contains(e.relatedTarget as Node)) {
+                        setModelMenuOpen(false);
+                        setModelQuery('');
+                      }
+                    }}
                     disabled={modelsLoading}
                   />
                   {modelMenuOpen ? (
                     <div className="ai-model-dropdown-list">
                       {filteredModels.length === 0 ? (
                         <div className="ai-model-dropdown-empty">
-                          {modelsLoading ? 'Loading…' : 'No matches'}
+                          {modelsLoading ? t('ai.settings.modelsLoading') : t('ai.settings.modelsEmpty')}
                         </div>
                       ) : (
                         filteredModels.slice(0, 80).map((m) => (
@@ -217,6 +233,7 @@ export function AiSettingsForm({ open, onClose }: AiSettingsFormProps): React.Re
                             key={m.id}
                             type="button"
                             className={`ai-model-dropdown-item ${m.id === defaultModel ? 'selected' : ''}`}
+                            onMouseDown={(e) => e.preventDefault()}
                             onClick={() => {
                               setDefaultModel(m.id);
                               setModelMenuOpen(false);
@@ -225,7 +242,7 @@ export function AiSettingsForm({ open, onClose }: AiSettingsFormProps): React.Re
                           >
                             <span className="ai-model-dropdown-name">{m.name}</span>
                             <span className="ai-model-dropdown-meta">
-                              {m.contextLength !== undefined ? `${m.contextLength} ctx` : m.id}
+                              {m.contextLength !== undefined ? t('ai.settings.ctxSuffix', { n: m.contextLength }) : m.id}
                             </span>
                           </button>
                         ))
@@ -233,10 +250,10 @@ export function AiSettingsForm({ open, onClose }: AiSettingsFormProps): React.Re
                     </div>
                   ) : null}
                 </div>
-              </label>
+              </div>
 
               <label className="ai-settings-label">
-                Temperature ({temperature.toFixed(1)})
+                {t('ai.settings.temperature', { n: temperature.toFixed(1) })}
                 <input
                   type="range"
                   className="ai-settings-range"
@@ -249,7 +266,7 @@ export function AiSettingsForm({ open, onClose }: AiSettingsFormProps): React.Re
               </label>
 
               <label className="ai-settings-label">
-                Max tokens
+                {t('ai.settings.maxTokens')}
                 <input
                   type="number"
                   className="ai-settings-input"
@@ -261,13 +278,13 @@ export function AiSettingsForm({ open, onClose }: AiSettingsFormProps): React.Re
               </label>
 
               <label className="ai-settings-label">
-                System prompt
+                {t('ai.settings.systemPrompt')}
                 <textarea
                   className="ai-settings-textarea"
                   rows={4}
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
-                  placeholder="Optional custom system prompt"
+                  placeholder={t('ai.settings.systemPromptPlaceholder')}
                 />
               </label>
 
@@ -277,11 +294,11 @@ export function AiSettingsForm({ open, onClose }: AiSettingsFormProps): React.Re
                   checked={includeContext}
                   onChange={(e) => setIncludeContext(e.target.checked)}
                 />
-                Include terminal context (OS, shell, cwd, recent commands)
+                {t('ai.settings.includeContext')}
               </label>
 
               <label className="ai-settings-label">
-                Recent commands count
+                {t('ai.settings.recentCount')}
                 <input
                   type="number"
                   className="ai-settings-input"
@@ -300,7 +317,7 @@ export function AiSettingsForm({ open, onClose }: AiSettingsFormProps): React.Re
                   checked={includeRecentOutput}
                   onChange={(e) => setIncludeRecentOutput(e.target.checked)}
                 />
-                Include recent terminal output in context
+                {t('ai.settings.includeOutput')}
               </label>
             </>
           )}
@@ -308,7 +325,7 @@ export function AiSettingsForm({ open, onClose }: AiSettingsFormProps): React.Re
 
         <div className="ai-settings-footer">
           <button type="button" className="ai-settings-btn secondary" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -316,7 +333,7 @@ export function AiSettingsForm({ open, onClose }: AiSettingsFormProps): React.Re
             disabled={loading || saving}
             onClick={() => void handleSave()}
           >
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? t('ai.settings.saving') : t('common.save')}
           </button>
         </div>
       </div>

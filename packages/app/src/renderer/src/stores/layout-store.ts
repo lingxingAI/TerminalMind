@@ -17,11 +17,11 @@ interface LayoutStoreState {
 
 export const useLayoutStore = create<LayoutStoreState>((set) => ({
   sidebarVisible: true,
-  sidebarWidth: 240,
-  panelVisible: false,
-  panelHeight: 200,
-  activeActivityBarItem: 'terminal',
-  activeSidebarView: 'terminal-list',
+  sidebarWidth: 260,
+  panelVisible: true,
+  panelHeight: 260,
+  activeActivityBarItem: 'connections',
+  activeSidebarView: 'connections',
   toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
   setSidebarWidth: (width) => set({ sidebarWidth: Math.max(160, Math.min(width, 480)) }),
   togglePanel: () => set((s) => ({ panelVisible: !s.panelVisible })),

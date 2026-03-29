@@ -30,8 +30,13 @@ export class Ssh2MockClient extends EventEmitter {
     cb(undefined, new PassThrough());
   }
 
-  shell(_opts: unknown, cb: (err: Error | undefined, stream?: PassThrough) => void): void {
-    cb(undefined, new PassThrough());
+  shell(
+    _opts: unknown,
+    cb: (err: Error | undefined, stream?: PassThrough & { stderr: PassThrough }) => void,
+  ): void {
+    const stream = new PassThrough() as PassThrough & { stderr: PassThrough };
+    stream.stderr = new PassThrough();
+    cb(undefined, stream);
   }
 
   exec(

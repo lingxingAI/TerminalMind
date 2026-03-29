@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { AIMessageDisplay } from '../../stores/ai-store';
 import { useTabStore } from '../../stores/tab-store';
 
@@ -61,6 +62,7 @@ function MessageBody({
   readonly align: 'left' | 'right';
   readonly showSendToTerminal: boolean;
 }): React.ReactElement {
+  const { t } = useTranslation();
   const segments = parseSegments(content);
   const activeSessionId = useTabStore((s) => {
     const tab = s.tabs.find((t) => t.isActive);
@@ -99,17 +101,17 @@ function MessageBody({
           <div key={`c-${i}`} className="ai-code-block-wrap">
             <div className="ai-code-toolbar">
               <button type="button" className="ai-code-copy" onClick={() => void copyToClipboard(seg.content)}>
-                Copy
+                {t('ai.messageList.copy')}
               </button>
               {showSendToTerminal ? (
                 <button
                   type="button"
                   className="ai-code-terminal"
                   disabled={!activeSessionId}
-                  title={activeSessionId ? 'Paste into active terminal' : 'No active terminal'}
+                  title={activeSessionId ? t('ai.messageList.pasteTooltip') : t('ai.messageList.noTerminalTooltip')}
                   onClick={() => sendToTerminal(seg.content)}
                 >
-                  Send to Terminal
+                  {t('ai.messageList.sendToTerminal')}
                 </button>
               ) : null}
             </div>
@@ -156,7 +158,7 @@ export function AiMessageList({
             {streamingContent ? (
               <MessageBody content={streamingContent} align="left" showSendToTerminal={false} />
             ) : (
-              <div className="ai-typing" aria-label="Generating">
+              <div className="ai-typing" aria-label={t('ai.messageList.generatingAria')}>
                 <span className="ai-typing-dot" />
                 <span className="ai-typing-dot" />
                 <span className="ai-typing-dot" />

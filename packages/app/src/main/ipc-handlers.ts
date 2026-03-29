@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { basename, join } from 'node:path';
-import { readdir, stat } from 'node:fs/promises';
-import { ipcMain, shell, type BrowserWindow } from 'electron';
+import { mkdir, readdir, stat } from 'node:fs/promises';
+import { dialog, ipcMain, shell, type BrowserWindow } from 'electron';
 import { IpcChannels, IpcEventChannels } from '@terminalmind/api';
 import type {
   CommandInfo,
@@ -96,9 +96,12 @@ function clearTerminalBuffers(sessionId: string): void {
   terminalOutputSnippets.delete(sessionId);
 }
 
+const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
+
 function readAiSettings(config: IConfigService): AISettings {
   return {
     activeProviderId: config.get('ai.activeProviderId', OPENROUTER_PROVIDER_ID),
+    baseUrl: config.get('ai.baseUrl', DEFAULT_BASE_URL),
     defaultModel: config.get('ai.defaultModel', 'openai/gpt-4o-mini'),
     temperature: config.get('ai.temperature', 0.7),
     maxTokens: config.get('ai.maxTokens', 2048),
@@ -116,18 +119,34 @@ async function buildTerminalAiContext(
     contextCollector: ContextCollector;
     terminalService: ITerminalService;
     sshTerminals: ReadonlyMap<string, { readonly term: TerminalSession; readonly sshSessionId: string }>;
+    sshService: ISSHService;
   }>,
 ): Promise<AICommandContext> {
-  const { sessionId, settings, contextCollector, terminalService, sshTerminals: sshTerms } = opts;
+  const { sessionId, settings, contextCollector, terminalService, sshTerminals: sshTerms, sshService: ssh } = opts;
   let cwd = process.cwd();
+  let osOverride: string | undefined;
+  let shellOverride: string | undefined;
+
   if (sessionId) {
     const local = terminalService.getSession(sessionId);
     if (local) {
       cwd = (local as unknown as { cwd: string }).cwd;
+      if (local.shellPath) {
+        shellOverride = local.shellPath;
+      }
     } else {
       const sshT = sshTerms.get(sessionId);
       if (sshT) {
         cwd = (sshT.term as unknown as { cwd: string }).cwd;
+
+        const sshSession = ssh.getSession(sshT.sshSessionId);
+        if (sshSession) {
+          osOverride = detectRemoteOs(terminalOutputSnippets.get(sessionId), terminalCommandHistory.get(sessionId));
+          shellOverride = detectRemoteShell(terminalOutputSnippets.get(sessionId));
+          if (!cwd || cwd === process.cwd()) {
+            cwd = `${sshSession.config.username}@${sshSession.config.host}:~`;
+          }
+        }
       }
     }
   }
@@ -136,7 +155,22 @@ async function buildTerminalAiContext(
     sessionId && n > 0 ? (terminalCommandHistory.get(sessionId) ?? []).slice(-n) : [];
   const recentOutput =
     settings.includeRecentOutput && sessionId ? (terminalOutputSnippets.get(sessionId) ?? '') : '';
-  return contextCollector.collect({ cwd, recentCommands, recentOutput });
+  return contextCollector.collect({ cwd, recentCommands, recentOutput, osOverride, shellOverride });
+}
+
+function detectRemoteOs(outputSnippet?: string, cmdHistory?: string[]): string {
+  const text = (outputSnippet ?? '') + '\n' + (cmdHistory ?? []).join('\n');
+  if (/darwin|macos|macOS/i.test(text)) return 'darwin';
+  if (/MINGW|MSYS|Windows|CYGWIN|cmd\.exe|powershell/i.test(text)) return 'win32';
+  return 'linux';
+}
+
+function detectRemoteShell(outputSnippet?: string): string {
+  const text = outputSnippet ?? '';
+  if (/zsh/i.test(text)) return '/bin/zsh';
+  if (/fish/i.test(text)) return '/usr/bin/fish';
+  if (/powershell|pwsh/i.test(text)) return 'powershell';
+  return '/bin/bash';
 }
 
 export interface AiMainServices {
@@ -222,7 +256,8 @@ function apiSshOptionsToServiceConfig(opts: Readonly<SSHConnectOptions>): SSHCon
     ...(opts.jumpHosts !== undefined
       ? { jumpHosts: opts.jumpHosts.map((j) => apiSshOptionsToServiceConfig(j)) }
       : {}),
-    ...(opts.keepAlive === true ? { keepAliveInterval: 30_000, keepaliveCountMax: 3 } : {}),
+    keepAliveInterval: opts.keepAlive === false ? undefined : 15_000,
+    keepaliveCountMax: opts.keepAlive === false ? undefined : 3,
     ...(opts.readyTimeout !== undefined ? { readyTimeout: opts.readyTimeout } : {}),
   };
 }
@@ -839,6 +874,10 @@ export function registerIpcHandlers(
     return out;
   });
 
+  ipcMain.handle(IpcChannels.LOCAL_MKDIR, async (_event, args: { absolutePath: string }) => {
+    await mkdir(args.absolutePath, { recursive: true });
+  });
+
   ipcMain.handle(IpcChannels.CONNECTIONS_LIST, async () => connectionStore.list());
 
   ipcMain.handle(IpcChannels.CONNECTIONS_GET, async (_event, args: { profileId: string }) => {
@@ -895,6 +934,7 @@ export function registerIpcHandlers(
               contextCollector: ai.contextCollector,
               terminalService,
               sshTerminals,
+              sshService,
             })
           : args.context;
       return ai.pipelineEngine.execute(ai.commandPipeline, {
@@ -955,6 +995,13 @@ export function registerIpcHandlers(
     },
   );
 
+  ipcMain.handle(
+    IpcChannels.AI_GET_API_KEY,
+    async (_event, args: Readonly<{ providerId: string }>) => {
+      return ai.aiSecrets.getApiKey(args.providerId);
+    },
+  );
+
   ipcMain.handle(IpcChannels.AI_GET_SETTINGS, async () => readAiSettings(ai.config));
 
   ipcMain.handle(
@@ -962,6 +1009,7 @@ export function registerIpcHandlers(
     async (_event, partial: Readonly<Partial<AISettings>>) => {
       const entries: [keyof AISettings, string][] = [
         ['activeProviderId', 'ai.activeProviderId'],
+        ['baseUrl', 'ai.baseUrl'],
         ['defaultModel', 'ai.defaultModel'],
         ['temperature', 'ai.temperature'],
         ['maxTokens', 'ai.maxTokens'],
@@ -974,6 +1022,14 @@ export function registerIpcHandlers(
         if (partial[field] !== undefined) {
           await ai.config.set(key, partial[field]);
         }
+      }
+      if (partial.baseUrl !== undefined) {
+        try {
+          const provider = ai.aiProvider.getActiveProvider();
+          if (provider instanceof OpenRouterProvider) {
+            provider.setBaseUrl(partial.baseUrl);
+          }
+        } catch { /* ignore */ }
       }
       if (partial.activeProviderId !== undefined) {
         try {
@@ -1067,6 +1123,69 @@ export function registerIpcHandlers(
     IpcChannels.EXTENSION_REVOKE_PERMISSION,
     async (_event, args: Readonly<{ extensionId: string; permission: Permission }>) => {
       permissionManager.revoke(args.extensionId, args.permission);
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.DIALOG_SAVE_FILE,
+    async (_event, args: Readonly<{ defaultName: string }>) => {
+      const result = await dialog.showSaveDialog(mainWindow, {
+        defaultPath: args.defaultName,
+        properties: ['showOverwriteConfirmation', 'createDirectory'],
+      });
+      return result.canceled ? null : result.filePath ?? null;
+    },
+  );
+
+  ipcMain.handle(IpcChannels.DIALOG_OPEN_DIRECTORY, async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    return result.canceled || result.filePaths.length === 0
+      ? null
+      : result.filePaths[0] ?? null;
+  });
+
+  ipcMain.handle(
+    IpcChannels.DIALOG_OPEN_FILE,
+    async (_event, args?: Readonly<{ multiple?: boolean }>) => {
+      const props: ('openFile' | 'multiSelections')[] = ['openFile'];
+      if (args?.multiple) {
+        props.push('multiSelections');
+      }
+      const result = await dialog.showOpenDialog(mainWindow, { properties: props });
+      return result.canceled || result.filePaths.length === 0 ? null : result.filePaths;
+    },
+  );
+
+  ipcMain.handle(
+    IpcChannels.LOCAL_LIST_FILES_RECURSIVE,
+    async (_event, args: { absolutePath: string }) => {
+      const results: { relativePath: string; size: number }[] = [];
+      async function walk(dir: string, prefix: string): Promise<void> {
+        let entries;
+        try {
+          entries = await readdir(dir, { withFileTypes: true });
+        } catch {
+          return;
+        }
+        for (const entry of entries) {
+          const full = join(dir, entry.name);
+          const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+          if (entry.isDirectory()) {
+            await walk(full, rel);
+          } else {
+            try {
+              const s = await stat(full);
+              results.push({ relativePath: rel, size: s.size });
+            } catch {
+              /* skip unreadable files */
+            }
+          }
+        }
+      }
+      await walk(args.absolutePath, '');
+      return results;
     },
   );
 }

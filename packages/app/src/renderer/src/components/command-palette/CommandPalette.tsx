@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useFuzzySearch } from './use-fuzzy-search';
 
 interface CommandPaletteProps {
@@ -7,6 +8,7 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({ visible, onClose }: CommandPaletteProps): React.ReactElement | null {
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -50,33 +52,40 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps): React
   if (!visible) return null;
 
   return (
-    <div className="command-palette-overlay" onClick={onClose}>
-      <div className="command-palette" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
-        <input
-          ref={inputRef}
-          className="command-palette-input"
-          type="text"
-          placeholder="Type a command..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <div className="command-palette-list">
+    <div className="cmd-palette-overlay" onClick={onClose}>
+      <div className="cmd-palette" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
+        <div className="cmd-palette-input">
+          <span className="material-symbols-rounded">search</span>
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder={t('commandPalette.placeholder')}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        <div className="cmd-palette-list">
           {results.map((cmd, i) => (
             <div
               key={cmd.id}
-              className={`command-palette-item ${i === selectedIndex ? 'selected' : ''}`}
+              className={`cmd-item ${i === selectedIndex ? 'selected' : ''}`}
               onClick={() => {
                 window.api.commands.execute(cmd.id);
                 onClose();
               }}
               onMouseEnter={() => setSelectedIndex(i)}
             >
+              <span className="material-symbols-rounded">
+                {cmd.category === 'SSH' ? 'cloud' : cmd.category === 'Terminal' ? 'terminal' : cmd.category === 'AI' ? 'smart_toy' : 'settings'}
+              </span>
+              <span className="cmd-label">{cmd.title}</span>
               <span className="cmd-category">{cmd.category}</span>
-              <span className="cmd-title">{cmd.title}</span>
             </div>
           ))}
           {results.length === 0 && query && (
-            <div className="command-palette-empty">No commands found</div>
+            <div className="sidebar-placeholder" style={{ padding: '20px 0' }}>
+              {t('commandPalette.noResults')}
+            </div>
           )}
         </div>
       </div>

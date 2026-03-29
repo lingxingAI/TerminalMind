@@ -142,11 +142,23 @@ class SSHTerminalSession implements TerminalSession {
     channel.on('data', (chunk: Buffer) => {
       this._onData.fire(chunk.toString('utf8'));
     });
-    channel.on('close', (code: number) => {
-      const exitCode = typeof code === 'number' ? code : 0;
+    channel.stderr.on('data', (chunk: Buffer) => {
+      this._onData.fire(chunk.toString('utf8'));
+    });
+    channel.on('exit', (code: number | null) => {
+      this._exitCode = typeof code === 'number' ? code : 0;
+    });
+    channel.on('close', () => {
+      if (this._status === 'exited') return;
       this._status = 'exited';
-      this._exitCode = exitCode;
-      this._onExit.fire({ exitCode });
+      this._onExit.fire({ exitCode: this._exitCode ?? 0 });
+      this.dispose();
+    });
+    channel.on('error', () => {
+      if (this._status === 'exited') return;
+      this._status = 'exited';
+      this._exitCode = 1;
+      this._onExit.fire({ exitCode: 1 });
       this.dispose();
     });
   }
@@ -172,22 +184,31 @@ class SSHTerminalSession implements TerminalSession {
   }
 
   write(data: string): void {
-    if (this._status === 'running') {
+    if (this._status !== 'running') return;
+    try {
       this.channel.write(data);
+    } catch {
+      // Channel already closed or destroyed — silently ignore
     }
   }
 
   kill(): void {
-    if (this._status === 'running') {
+    if (this._status !== 'running') return;
+    try {
       this.channel.end();
+    } catch {
+      // already closed
     }
   }
 
   resize(cols: number, rows: number): void {
-    if (this._status === 'running') {
+    if (this._status !== 'running') return;
+    try {
       const widthPx = Math.max(cols * 8, 1);
       const heightPx = Math.max(rows * 16, 1);
       this.channel.setWindow(rows, cols, heightPx, widthPx);
+    } catch {
+      // channel already closed
     }
   }
 
@@ -352,16 +373,29 @@ export class ManagedSSHSession implements SSHSession {
     return primary;
   }
 
-  async shell(): Promise<TerminalSession> {
+  async shell(
+    initialWindow?: { cols: number; rows: number },
+  ): Promise<TerminalSession> {
     const primary = this.requirePrimary();
+    const cols = initialWindow?.cols ?? 120;
+    const rows = initialWindow?.rows ?? 30;
     const channel = await new Promise<ClientChannel>((resolve, reject) => {
-      primary.shell({ term: 'xterm-256color' }, (err, stream) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(stream!);
-      });
+      primary.shell(
+        {
+          term: 'xterm-256color',
+          cols,
+          rows,
+          width: cols * 8,
+          height: rows * 16,
+        },
+        (err, stream) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(stream!);
+        },
+      );
     });
     const title = `${this.config.username}@${this.config.host}`;
     return new SSHTerminalSession(

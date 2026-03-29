@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ShellInfo } from '@terminalmind/api';
 
 interface ShellSelectorProps {
@@ -7,6 +8,7 @@ interface ShellSelectorProps {
 }
 
 export function ShellSelector({ onSelect, onCancel }: ShellSelectorProps): React.ReactElement {
+  const { t } = useTranslation();
   const [shells, setShells] = useState<readonly ShellInfo[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -38,9 +40,9 @@ export function ShellSelector({ onSelect, onCancel }: ShellSelectorProps): React
   );
 
   return (
-    <div className="shell-selector-overlay" onKeyDown={handleKeyDown} tabIndex={0} autoFocus>
-      <div className="shell-selector">
-        <div className="shell-selector-header">Select Shell</div>
+    <div className="shell-selector-overlay" onClick={onCancel} onKeyDown={handleKeyDown} tabIndex={0} autoFocus>
+      <div className="shell-selector" onClick={(e) => e.stopPropagation()}>
+        <div className="shell-selector-header">{t('terminal.shellSelector.title')}</div>
         <div className="shell-selector-list">
           {shells.map((shell, i) => (
             <div
@@ -51,7 +53,7 @@ export function ShellSelector({ onSelect, onCancel }: ShellSelectorProps): React
             >
               <span className="shell-name">{shell.name}</span>
               <span className="shell-path">{shell.path}</span>
-              {shell.isDefault && <span className="shell-default">default</span>}
+              {shell.isDefault && <span className="shell-default">{t('terminal.shellSelector.default')}</span>}
             </div>
           ))}
         </div>

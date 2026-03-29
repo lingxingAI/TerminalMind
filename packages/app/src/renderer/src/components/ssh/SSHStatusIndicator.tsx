@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { SSHSessionInfo } from '@terminalmind/api';
 
 export type SSHIndicatorState = 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -28,6 +29,7 @@ export function SSHStatusIndicator({
   className = '',
   variant = 'default',
 }: SSHStatusIndicatorProps): React.ReactElement {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<SSHIndicatorState>('connecting');
   const [session, setSession] = useState<SSHSessionInfo | null>(null);
   const [tick, setTick] = useState(0);
@@ -86,7 +88,7 @@ export function SSHStatusIndicator({
 
   return (
     <span className={`ssh-status-indicator ${className}`.trim()}>
-      <span className={dotClass} title={`SSH: ${status}`} aria-hidden />
+      <span className={dotClass} title={t('ssh.status.title', { status })} aria-hidden />
       {variant === 'statusBar' && hostLine ? (
         <span className="ssh-status-detail">{hostLine}</span>
       ) : (
@@ -94,7 +96,7 @@ export function SSHStatusIndicator({
       )}
       {(status === 'disconnected' || status === 'error') && onReconnect ? (
         <button type="button" className="ssh-status-reconnect" onClick={() => void onReconnect()}>
-          Reconnect
+          {t('ssh.status.reconnect')}
         </button>
       ) : null}
     </span>

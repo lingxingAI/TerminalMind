@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { LocalDirEntry, SFTPFileEntry } from '@terminalmind/api';
 import { FileTree } from './FileTree';
 import { useSftpBrowserStore } from '../../stores/sftp-browser-store';
 import { useTransferStore } from '../../stores/transfer-store';
+import { useTransferIpcSync } from '../../hooks/useTransferIpcSync';
 
 function joinLocal(dir: string, name: string): string {
   const d = dir.replace(/[/\\]+$/, '');
@@ -52,6 +54,7 @@ export interface FileBrowserProps {
 }
 
 export function FileBrowser({ sshSessionId: sshSessionIdProp }: FileBrowserProps): React.ReactElement {
+  const { t } = useTranslation();
   const storeSession = useSftpBrowserStore((s) => s.selectedSshSessionId);
   const setStoreSession = useSftpBrowserStore((s) => s.setSelectedSshSessionId);
 
@@ -65,6 +68,53 @@ export function FileBrowser({ sshSessionId: sshSessionIdProp }: FileBrowserProps
   const [selectedRemoteEntry, setSelectedRemoteEntry] = useState<SFTPFileEntry | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const addTask = useTransferStore((s) => s.addTask);
+  const [splitRatio, setSplitRatio] = useState(0.5);
+  const dualPanelRef = useRef<HTMLDivElement>(null);
+
+  const handleSplitDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const container = dualPanelRef.current;
+    if (!container) return;
+    const startX = e.clientX;
+    const containerRect = container.getBoundingClientRect();
+    const startRatio = splitRatio;
+    const onMove = (ev: MouseEvent) => {
+      const delta = ev.clientX - startX;
+      const newRatio = startRatio + delta / containerRect.width;
+      setSplitRatio(Math.max(0.2, Math.min(0.8, newRatio)));
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [splitRatio]);
+
+  useTransferIpcSync();
+  const transferTasks = useTransferStore((s) => s.tasks);
+  const activeTasks = transferTasks.filter(
+    (t) => t.status === 'queued' || t.status === 'transferring',
+  );
+  const [showCompleted, setShowCompleted] = useState(false);
+  const completedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const justFinished = transferTasks.filter((t) => t.status === 'completed');
+    if (justFinished.length > 0 && activeTasks.length === 0) {
+      setShowCompleted(true);
+      if (completedRef.current) clearTimeout(completedRef.current);
+      completedRef.current = setTimeout(() => setShowCompleted(false), 2000);
+    }
+    if (activeTasks.length > 0) {
+      setShowCompleted(false);
+      if (completedRef.current) clearTimeout(completedRef.current);
+    }
+  }, [activeTasks.length, transferTasks]);
 
   const effectiveSessionId = sshSessionIdProp ?? storeSession;
 
@@ -153,44 +203,104 @@ export function FileBrowser({ sshSessionId: sshSessionIdProp }: FileBrowserProps
   }, [effectiveSessionId, selectedLocal, remoteTargetDir, addTask]);
 
   const handleDownload = useCallback(async () => {
-    if (!effectiveSessionId || !selectedRemotePath || !selectedRemoteEntry || entryIsDir(selectedRemoteEntry)) {
+    if (!effectiveSessionId || !selectedRemotePath || !selectedRemoteEntry) {
       return;
     }
     if (!localDir.trim()) {
-      window.alert('Set a local directory path first.');
+      window.alert(t('sftp.setLocalPath'));
       return;
     }
-    const fn = baseName(selectedRemotePath);
-    const localPath = joinLocal(localDir.trim(), fn);
-    try {
-      const { transferId } = await window.api.sftp.download({
-        sessionId: effectiveSessionId,
-        localPath,
-        remotePath: selectedRemotePath,
-      });
-      addTask({
-        id: transferId,
-        sshSessionId: effectiveSessionId,
-        direction: 'download',
-        localPath,
-        remotePath: selectedRemotePath,
-        filename: fn,
-        status: 'queued',
-        progress: 0,
-        bytesTransferred: 0,
-        totalBytes: 0,
-      });
-      void loadLocal();
-    } catch (e) {
-      console.error(e);
+
+    if (entryIsDir(selectedRemoteEntry)) {
+      const folderName = baseName(selectedRemotePath);
+      const localBase = joinLocal(localDir.trim(), folderName);
+
+      const collectFiles = async (
+        remoteDirPath: string,
+        localDirPath: string,
+      ): Promise<{ remotePath: string; localPath: string; filename: string }[]> => {
+        const entries = await window.api.sftp.list({
+          sessionId: effectiveSessionId,
+          remotePath: remoteDirPath,
+        });
+        const results: { remotePath: string; localPath: string; filename: string }[] = [];
+        for (const entry of entries) {
+          const childRemote = joinRemoteDir(remoteDirPath, entry.filename);
+          const childLocal = joinLocal(localDirPath, entry.filename);
+          if (entryIsDir(entry)) {
+            await window.api.local.mkdir(childLocal);
+            const children = await collectFiles(childRemote, childLocal);
+            results.push(...children);
+          } else {
+            results.push({ remotePath: childRemote, localPath: childLocal, filename: entry.filename });
+          }
+        }
+        return results;
+      };
+
+      try {
+        await window.api.local.mkdir(localBase);
+        const files = await collectFiles(selectedRemotePath, localBase);
+        for (const file of files) {
+          try {
+            const { transferId } = await window.api.sftp.download({
+              sessionId: effectiveSessionId,
+              localPath: file.localPath,
+              remotePath: file.remotePath,
+            });
+            addTask({
+              id: transferId,
+              sshSessionId: effectiveSessionId,
+              direction: 'download',
+              localPath: file.localPath,
+              remotePath: file.remotePath,
+              filename: file.filename,
+              status: 'queued',
+              progress: 0,
+              bytesTransferred: 0,
+              totalBytes: 0,
+            });
+          } catch (e) {
+            console.error('Download failed:', file.remotePath, e);
+          }
+        }
+        void loadLocal();
+      } catch (e) {
+        console.error('Folder download failed:', e);
+      }
+    } else {
+      const fn = baseName(selectedRemotePath);
+      const localPath = joinLocal(localDir.trim(), fn);
+      try {
+        const { transferId } = await window.api.sftp.download({
+          sessionId: effectiveSessionId,
+          localPath,
+          remotePath: selectedRemotePath,
+        });
+        addTask({
+          id: transferId,
+          sshSessionId: effectiveSessionId,
+          direction: 'download',
+          localPath,
+          remotePath: selectedRemotePath,
+          filename: fn,
+          status: 'queued',
+          progress: 0,
+          bytesTransferred: 0,
+          totalBytes: 0,
+        });
+        void loadLocal();
+      } catch (e) {
+        console.error(e);
+      }
     }
-  }, [effectiveSessionId, selectedRemotePath, selectedRemoteEntry, localDir, addTask, loadLocal]);
+  }, [effectiveSessionId, selectedRemotePath, selectedRemoteEntry, localDir, addTask, loadLocal, t]);
 
   const handleNewRemoteFolder = useCallback(async () => {
     if (!effectiveSessionId) {
       return;
     }
-    const name = window.prompt('New folder name');
+    const name = window.prompt(t('sftp.newFolderPrompt'));
     if (!name) {
       return;
     }
@@ -201,7 +311,7 @@ export function FileBrowser({ sshSessionId: sshSessionIdProp }: FileBrowserProps
     } catch (e) {
       console.error(e);
     }
-  }, [effectiveSessionId, remoteTargetDir, bumpRefresh]);
+  }, [effectiveSessionId, remoteTargetDir, bumpRefresh, t]);
 
   const crumbs =
     remoteRoot === '/' || remoteRoot === ''
@@ -211,8 +321,8 @@ export function FileBrowser({ sshSessionId: sshSessionIdProp }: FileBrowserProps
   if (!effectiveSessionId) {
     return (
       <div className="sftp-file-browser sftp-browser-empty">
-        <p>No SSH session selected.</p>
-        <p className="sftp-browser-hint">Connect via SSH, then pick a session:</p>
+        <p>{t('sftp.noSession')}</p>
+        <p className="sftp-browser-hint">{t('sftp.connectHint')}</p>
         <select
           className="sftp-session-select"
           value=""
@@ -243,7 +353,7 @@ export function FileBrowser({ sshSessionId: sshSessionIdProp }: FileBrowserProps
             </option>
           ))}
         </select>
-        <div className="sftp-breadcrumbs" aria-label="Remote path">
+        <div className="sftp-breadcrumbs" aria-label={t('sftp.remotePathAria')}>
           {crumbs.map((seg, i) => (
             <React.Fragment key={`${i}-${seg || 'root'}`}>
               {i > 0 && <span className="sftp-crumb-sep">/</span>}
@@ -260,36 +370,45 @@ export function FileBrowser({ sshSessionId: sshSessionIdProp }: FileBrowserProps
             </React.Fragment>
           ))}
         </div>
-        <button type="button" className="sftp-toolbar-btn" onClick={bumpRefresh}>
-          Refresh
+        <button
+          type="button"
+          className="sftp-toolbar-btn"
+          onClick={() => setRemoteRoot(parentRemote(remoteRoot))}
+          disabled={remoteRoot === '/'}
+          title={t('sftp.parentDir')}
+        >
+          <span className="material-symbols-rounded" style={{ fontSize: 16 }}>arrow_upward</span>
+        </button>
+        <button type="button" className="sftp-toolbar-btn" onClick={bumpRefresh} title={t('common.refresh')}>
+          <span className="material-symbols-rounded" style={{ fontSize: 16 }}>refresh</span>
         </button>
         <button type="button" className="sftp-toolbar-btn" onClick={handleUpload} disabled={!selectedLocal}>
-          Upload
+          {t('sftp.upload')}
         </button>
         <button
           type="button"
           className="sftp-toolbar-btn"
           onClick={handleDownload}
-          disabled={!selectedRemotePath || !selectedRemoteEntry || entryIsDir(selectedRemoteEntry)}
+          disabled={!selectedRemotePath || !selectedRemoteEntry}
         >
-          Download
+          {t('sftp.download')}
         </button>
         <button type="button" className="sftp-toolbar-btn" onClick={handleNewRemoteFolder}>
-          New folder
+          {t('sftp.newFolder')}
         </button>
       </div>
-      <div className="sftp-dual-panel">
-        <div className="sftp-local-panel">
-          <div className="sftp-panel-head">Local</div>
+      <div className="sftp-dual-panel" ref={dualPanelRef}>
+        <div className="sftp-local-panel" style={{ flex: splitRatio }}>
+          <div className="sftp-panel-head">{t('common.local')}</div>
           <div className="sftp-path-row">
             <input
               className="sftp-path-input"
               value={localDir}
               onChange={(e) => setLocalDir(e.target.value)}
-              placeholder="Absolute path (e.g. C:\Users\me\Downloads)"
+              placeholder={t('sftp.localPathPlaceholder')}
             />
             <button type="button" className="sftp-toolbar-btn sftp-small" onClick={() => void loadLocal()}>
-              Go
+              {t('sftp.go')}
             </button>
           </div>
           {localError && <div className="sftp-tree-error">{localError}</div>}
@@ -319,8 +438,12 @@ export function FileBrowser({ sshSessionId: sshSessionIdProp }: FileBrowserProps
             ))}
           </div>
         </div>
-        <div className="sftp-remote-panel">
-          <div className="sftp-panel-head">Remote</div>
+        <div
+          className="sftp-resize-handle"
+          onMouseDown={handleSplitDragStart}
+        />
+        <div className="sftp-remote-panel" style={{ flex: 1 - splitRatio }}>
+          <div className="sftp-panel-head">{t('common.remote')}</div>
           <FileTree
             sshSessionId={effectiveSessionId}
             rootPath={remoteRoot}
@@ -329,6 +452,27 @@ export function FileBrowser({ sshSessionId: sshSessionIdProp }: FileBrowserProps
           />
         </div>
       </div>
+      {(activeTasks.length > 0 || showCompleted) && (
+        <div className="sftp-download-progress">
+          {activeTasks.length > 0 ? (
+            activeTasks.map((task) => (
+              <div key={task.id} className="sftp-dp-item">
+                <span className="sftp-dp-icon">{task.direction === 'upload' ? '↑' : '↓'}</span>
+                <span className="sftp-dp-name" title={task.remotePath || task.localPath}>{task.filename}</span>
+                <div className="sftp-dp-bar-wrap">
+                  <div className="sftp-dp-bar" style={{ width: `${Math.min(100, task.progress)}%` }} />
+                </div>
+                <span className="sftp-dp-pct">{Math.round(task.progress)}%</span>
+              </div>
+            ))
+          ) : (
+            <div className="sftp-dp-item sftp-dp-done">
+              <span className="sftp-dp-icon">✓</span>
+              <span className="sftp-dp-name">{t('sftp.transferComplete')}</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { InstallProgress, RegistryEntry } from '@terminalmind/api';
 import { ExtensionDetailsView } from './ExtensionDetailsView';
 
@@ -7,6 +8,7 @@ function Spinner(): React.ReactElement {
 }
 
 export function MarketplacePanel(): React.ReactElement {
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,8 +30,8 @@ export function MarketplacePanel(): React.ReactElement {
   }, [refreshInstalledNames]);
 
   useEffect(() => {
-    const t = window.setTimeout(() => setDebounced(query), 300);
-    return () => window.clearTimeout(t);
+    const debounceTimer = window.setTimeout(() => setDebounced(query), 300);
+    return () => window.clearTimeout(debounceTimer);
   }, [query]);
 
   useEffect(() => {
@@ -43,9 +45,9 @@ export function MarketplacePanel(): React.ReactElement {
           setResults(r.entries);
         }
       })
-      .catch((err: Error) => {
+      .catch(() => {
         if (!cancelled) {
-          setError(err.message ?? 'Failed to load extensions');
+          setError(t('extensions.marketplace.loadError'));
         }
       })
       .finally(() => {
@@ -56,7 +58,7 @@ export function MarketplacePanel(): React.ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [debounced]);
+  }, [debounced, t]);
 
   useEffect(() => {
     return window.api.marketplace.onInstallProgress((p) => {
@@ -96,10 +98,10 @@ export function MarketplacePanel(): React.ReactElement {
         <input
           type="search"
           className="marketplace-search-input"
-          placeholder="Search extensions…"
+          placeholder={t('extensions.marketplace.searchPlaceholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          aria-label="Search marketplace"
+          aria-label={t('extensions.marketplace.searchPlaceholder')}
         />
       </div>
 
@@ -124,9 +126,9 @@ export function MarketplacePanel(): React.ReactElement {
           <Spinner />
         </div>
       ) : error ? (
-        <div className="marketplace-center marketplace-error">Failed to load extensions</div>
+        <div className="marketplace-center marketplace-error">{error}</div>
       ) : results.length === 0 ? (
-        <div className="marketplace-center marketplace-muted">No extensions found</div>
+        <div className="marketplace-center marketplace-muted">{t('extensions.marketplace.empty')}</div>
       ) : (
         <ul className="marketplace-results">
           {results.map((e) => {
@@ -145,20 +147,20 @@ export function MarketplacePanel(): React.ReactElement {
                   <div className="marketplace-card-sub">{e.name}</div>
                   <p className="marketplace-card-desc">{e.description}</p>
                   <div className="marketplace-card-footer">
-                    <span>{e.author}</span>
-                    <span>{(e.downloads ?? 0).toLocaleString()} downloads</span>
+                    <span>{t('extensions.marketplace.byAuthor', { author: e.author })}</span>
+                    <span>{t('extensions.marketplace.downloads', { count: e.downloads ?? 0 })}</span>
                   </div>
                 </button>
                 <div className="marketplace-card-actions">
                   {installed ? (
-                    <span className="marketplace-badge">Installed</span>
+                    <span className="marketplace-badge">{t('extensions.marketplace.installed')}</span>
                   ) : (
                     <button
                       type="button"
                       className="marketplace-btn small primary"
                       onClick={() => void window.api.marketplace.install(e.name, e.version)}
                     >
-                      Install
+                      {t('extensions.marketplace.install')}
                     </button>
                   )}
                 </div>

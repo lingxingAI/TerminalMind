@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTransferStore } from '../../stores/transfer-store';
 
 function formatBytes(n: number): string {
@@ -46,6 +47,7 @@ function TransferRowSpeed({
 }
 
 export function TransferQueue(): React.ReactElement {
+  const { t } = useTranslation();
   const tasks = useTransferStore((s) => s.tasks);
 
   const handleClear = async () => {
@@ -61,34 +63,34 @@ export function TransferQueue(): React.ReactElement {
   return (
     <div className="sftp-transfer-queue">
       <div className="sftp-tq-header">
-        <span className="sftp-tq-title">Transfers</span>
+        <span className="sftp-tq-title">{t('sftp.transferQueue.title')}</span>
         <button type="button" className="sftp-toolbar-btn sftp-small" onClick={() => void handleClear()}>
-          Clear completed
+          {t('sftp.transferQueue.clearCompleted')}
         </button>
       </div>
       {tasks.length === 0 ? (
-        <div className="sftp-tq-empty">No active transfers</div>
+        <div className="sftp-tq-empty">{t('sftp.transferQueue.empty')}</div>
       ) : (
         <ul className="sftp-tq-list">
-          {tasks.map((t) => (
-            <li key={t.id} className="sftp-tq-item">
+          {tasks.map((task) => (
+            <li key={task.id} className="sftp-tq-item">
               <div className="sftp-tq-row1">
-                <span className="sftp-tq-arrow">{t.direction === 'upload' ? '↑' : '↓'}</span>
-                <span className="sftp-tq-name" title={t.remotePath || t.localPath}>
-                  {t.filename}
+                <span className="sftp-tq-arrow">{task.direction === 'upload' ? '↑' : '↓'}</span>
+                <span className="sftp-tq-name" title={task.remotePath || task.localPath}>
+                  {task.filename}
                 </span>
                 <span className="sftp-tq-pct">
-                  {t.status === 'failed' ? 'failed' : `${Math.round(t.progress)}%`}
+                  {task.status === 'failed' ? t('sftp.transferQueue.failed') : `${Math.round(task.progress)}%`}
                 </span>
-                <TransferRowSpeed bytesTransferred={t.bytesTransferred} status={t.status} />
+                <TransferRowSpeed bytesTransferred={task.bytesTransferred} status={task.status} />
               </div>
               <div className="sftp-tq-bar-wrap">
-                <div className="sftp-tq-bar" style={{ width: `${Math.min(100, t.progress)}%` }} />
+                <div className="sftp-tq-bar" style={{ width: `${Math.min(100, task.progress)}%` }} />
               </div>
-              {t.status === 'failed' && t.error && <div className="sftp-tq-err">{t.error}</div>}
-              {t.status === 'failed' && (
-                <button type="button" className="sftp-toolbar-btn sftp-small" onClick={() => void handleRetry(t.id)}>
-                  Retry
+              {task.status === 'failed' && task.error && <div className="sftp-tq-err">{task.error}</div>}
+              {task.status === 'failed' && (
+                <button type="button" className="sftp-toolbar-btn sftp-small" onClick={() => void handleRetry(task.id)}>
+                  {t('sftp.transferQueue.retry')}
                 </button>
               )}
             </li>

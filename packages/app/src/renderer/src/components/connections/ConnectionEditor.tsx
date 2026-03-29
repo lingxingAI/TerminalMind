@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ConnectionProfile, SSHAuthMethod, SSHConnectOptions } from '@terminalmind/api';
 import { useConnectionStore } from '../../stores/connection-store';
 
@@ -79,6 +80,7 @@ function buildAuth(form: FormState, existing?: SSHConnectOptions): SSHAuthMethod
 }
 
 export function ConnectionEditor(): React.ReactElement {
+  const { t } = useTranslation();
   const isOpen = useConnectionStore((s) => s.isEditorOpen);
   const editing = useConnectionStore((s) => s.editingConnection);
   const closeEditor = useConnectionStore((s) => s.closeEditor);
@@ -87,11 +89,16 @@ export function ConnectionEditor(): React.ReactElement {
   const [form, setForm] = useState<FormState>(defaultForm);
   const [existingProfile, setExistingProfile] = useState<ConnectionProfile | null>(null);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (!isOpen) {
       setForm(defaultForm);
       setExistingProfile(null);
+      setTestResult(null);
+      setShowPassword(false);
       return;
     }
     if (editing) {
@@ -113,6 +120,32 @@ export function ConnectionEditor(): React.ReactElement {
   const update = useCallback((patch: Partial<FormState>) => {
     setForm((f) => ({ ...f, ...patch }));
   }, []);
+
+  const handleTestConnection = useCallback(async () => {
+    const host = form.host.trim();
+    const username = form.username.trim();
+    if (!host || !username) {
+      setTestResult({ ok: false, message: t('connections.editor.testRequired') });
+      return;
+    }
+    const port = Math.min(65535, Math.max(1, parseInt(form.port, 10) || 22));
+    const existingSsh = existingProfile?.sshConfig;
+    const auth = buildAuth(form, existingSsh);
+    const sshConfig: SSHConnectOptions = { host, port, username, auth };
+
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const info = await window.api.ssh.connect(sshConfig);
+      await window.api.ssh.disconnect(info.sessionId);
+      setTestResult({ ok: true, message: t('connections.editor.testSuccess', { host, port }) });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setTestResult({ ok: false, message: msg });
+    } finally {
+      setTesting(false);
+    }
+  }, [form, existingProfile, t]);
 
   const handleSave = useCallback(async () => {
     const name = form.name.trim();
@@ -166,81 +199,91 @@ export function ConnectionEditor(): React.ReactElement {
   if (!isOpen) return <></>;
 
   return (
-    <div className="connection-editor-overlay" role="dialog" aria-modal="true" aria-labelledby="connection-editor-title">
-      <button type="button" className="connection-editor-backdrop" aria-label="Close" onClick={closeEditor} />
-      <div className="connection-editor-panel">
-        <h2 id="connection-editor-title" className="connection-editor-title">
-          {editing ? 'Edit connection' : 'New connection'}
-        </h2>
-
-        <label className="connection-editor-field">
-          <span>Name</span>
-          <input value={form.name} onChange={(e) => update({ name: e.target.value })} autoFocus />
-        </label>
-
-        <label className="connection-editor-field">
-          <span>Host</span>
-          <input value={form.host} onChange={(e) => update({ host: e.target.value })} />
-        </label>
-
-        <label className="connection-editor-field">
-          <span>Port</span>
-          <input value={form.port} onChange={(e) => update({ port: e.target.value })} inputMode="numeric" />
-        </label>
-
-        <label className="connection-editor-field">
-          <span>Username</span>
-          <input value={form.username} onChange={(e) => update({ username: e.target.value })} />
-        </label>
-
-        <label className="connection-editor-field">
-          <span>Auth type</span>
-          <select
-            value={form.authType}
-            onChange={(e) => update({ authType: e.target.value as AuthChoice })}
-          >
-            <option value="password">Password</option>
-            <option value="publicKey">Public key</option>
-            <option value="agent">SSH agent</option>
-          </select>
-        </label>
-
-        {form.authType === 'password' ? (
-          <label className="connection-editor-field">
-            <span>Password</span>
-            <input
-              type="password"
-              value={form.password}
-              onChange={(e) => update({ password: e.target.value })}
-              placeholder={editing ? 'Leave blank to keep saved password' : ''}
-              autoComplete="off"
-            />
-          </label>
-        ) : null}
-
-        {form.authType === 'publicKey' ? (
-          <label className="connection-editor-field">
-            <span>Private key path</span>
-            <input value={form.keyPath} onChange={(e) => update({ keyPath: e.target.value })} placeholder="~/.ssh/id_rsa" />
-          </label>
-        ) : null}
-
-        <label className="connection-editor-field">
-          <span>Group</span>
-          <input value={form.group} onChange={(e) => update({ group: e.target.value })} placeholder="Optional" />
-        </label>
-
-        <label className="connection-editor-field">
-          <span>Tags</span>
-          <input value={form.tags} onChange={(e) => update({ tags: e.target.value })} placeholder="Comma-separated" />
-        </label>
-
-        <div className="connection-editor-actions">
-          <button type="button" className="connection-editor-btn secondary" onClick={closeEditor} disabled={saving}>
-            Cancel
+    <div className="dialog-overlay" onClick={closeEditor}>
+      <div className="dialog" onClick={(e) => e.stopPropagation()}>
+        <div className="dialog-header">
+          <h2>{editing ? t('connections.editor.titleEdit') : t('connections.editor.titleNew')}</h2>
+          <button type="button" className="close-btn" onClick={closeEditor}>
+            <span className="material-symbols-rounded">close</span>
           </button>
-          <button type="button" className="connection-editor-btn primary" onClick={() => void handleSave()} disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
+        </div>
+        <div className="dialog-body">
+          <div className="form-group">
+            <label className="form-label">{t('connections.editor.name')}</label>
+            <input className="form-input" placeholder={t('connections.editor.namePlaceholder')} value={form.name} onChange={(e) => update({ name: e.target.value })} autoFocus />
+          </div>
+          <div className="form-group">
+            <label className="form-label">{t('connections.editor.group')}</label>
+            <input className="form-input" placeholder={t('connections.editor.groupPlaceholder')} value={form.group} onChange={(e) => update({ group: e.target.value })} />
+          </div>
+          <div className="form-row">
+            <div className="form-group" style={{ flex: 3 }}>
+              <label className="form-label">{t('connections.editor.host')}</label>
+              <input className="form-input" placeholder={t('connections.editor.hostPlaceholder')} value={form.host} onChange={(e) => update({ host: e.target.value })} />
+            </div>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label className="form-label">{t('connections.editor.port')}</label>
+              <input className="form-input" placeholder="22" value={form.port} onChange={(e) => update({ port: e.target.value })} inputMode="numeric" />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">{t('connections.editor.username')}</label>
+            <input className="form-input" placeholder={t('connections.editor.usernamePlaceholder')} value={form.username} onChange={(e) => update({ username: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">{t('connections.editor.auth')}</label>
+            <div className="auth-tabs">
+              <button type="button" className={`auth-tab ${form.authType === 'password' ? 'active' : ''}`} onClick={() => update({ authType: 'password' })}>{t('connections.editor.authPassword')}</button>
+              <button type="button" className={`auth-tab ${form.authType === 'publicKey' ? 'active' : ''}`} onClick={() => update({ authType: 'publicKey' })}>{t('connections.editor.authKeyFile')}</button>
+              <button type="button" className={`auth-tab ${form.authType === 'agent' ? 'active' : ''}`} onClick={() => update({ authType: 'agent' })}>{t('connections.editor.authAgent')}</button>
+            </div>
+          </div>
+          {form.authType === 'password' && (
+            <div className="form-group">
+              <label className="form-label">{t('connections.editor.password')}</label>
+              <div className="input-with-action">
+                <input className="form-input" type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => update({ password: e.target.value })} placeholder={editing ? t('connections.editor.passwordKeepSaved') : ''} autoComplete="off" />
+                <button type="button" className="input-action-btn" onClick={() => setShowPassword((v) => !v)} title={showPassword ? t('connections.editor.hidePassword') : t('connections.editor.showPassword')}>
+                  <span className="material-symbols-rounded">{showPassword ? 'visibility_off' : 'visibility'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+          {form.authType === 'publicKey' && (
+            <div className="form-group">
+              <label className="form-label">{t('connections.editor.keyPath')}</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input className="form-input" style={{ flex: 1 }} value={form.keyPath} onChange={(e) => update({ keyPath: e.target.value })} placeholder={t('connections.editor.keyPathPlaceholder')} />
+                <button type="button" className="btn btn-ghost" style={{ whiteSpace: 'nowrap' }}>{t('connections.editor.browse')}</button>
+              </div>
+            </div>
+          )}
+          <div className="form-group">
+            <label className="form-label">{t('connections.editor.jumpHost')}</label>
+            <select className="form-select">
+              <option>{t('connections.editor.jumpNone')}</option>
+              <option>bastion-01 (10.0.0.5)</option>
+              <option>bastion-02 (10.0.0.6)</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">{t('connections.editor.tags')}</label>
+            <input className="form-input" value={form.tags} onChange={(e) => update({ tags: e.target.value })} placeholder={t('connections.editor.tagsPlaceholder')} />
+          </div>
+        </div>
+        {testResult && (
+          <div className={`test-result ${testResult.ok ? 'success' : 'error'}`}>
+            <span className="material-symbols-rounded">{testResult.ok ? 'check_circle' : 'error'}</span>
+            {testResult.message}
+          </div>
+        )}
+        <div className="dialog-footer">
+          <button type="button" className="btn btn-ghost" onClick={() => void handleTestConnection()} disabled={testing || saving}>
+            {testing ? t('connections.editor.testing') : t('connections.editor.testConnection')}
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={closeEditor} disabled={saving}>{t('common.cancel')}</button>
+          <button type="button" className="btn btn-primary" onClick={() => void handleSave()} disabled={saving}>
+            {saving ? t('connections.editor.saving') : t('connections.editor.saveConnect')}
           </button>
         </div>
       </div>

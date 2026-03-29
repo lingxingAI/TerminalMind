@@ -1,17 +1,15 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useLayoutStore } from '../../stores/layout-store';
 
 const ITEMS = [
-  { id: 'terminal', label: 'Terminal', icon: '>_' },
-  { id: 'files', label: 'Files', icon: '📁' },
-  { id: 'connections', label: 'Connections', icon: '🔌' },
-  { id: 'search', label: 'Search', icon: '🔍' },
-  { id: 'ai', label: 'AI', icon: '✨' },
-  { id: 'extensions', label: 'Extensions', icon: '🧩' },
-  { id: 'settings', label: 'Settings', icon: '⚙' },
+  { id: 'connections', labelKey: 'layout.connections', icon: 'dns' },
+  { id: 'files', labelKey: 'layout.files', icon: 'folder' },
+  { id: 'extensions', labelKey: 'layout.extensions', icon: 'extension' },
 ] as const;
 
 export function ActivityBar(): React.ReactElement {
+  const { t } = useTranslation();
   const activeItem = useLayoutStore((s) => s.activeActivityBarItem);
   const setActive = useLayoutStore((s) => s.setActiveActivityBarItem);
   const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
@@ -29,13 +27,21 @@ export function ActivityBar(): React.ReactElement {
       {ITEMS.map((item) => (
         <button
           key={item.id}
-          className={`activity-bar-item ${activeItem === item.id ? 'active' : ''}`}
+          className={`ab-btn ${activeItem === item.id ? 'active' : ''}`}
           onClick={() => handleClick(item.id)}
-          title={item.label}
+          title={t(item.labelKey)}
         >
-          {item.icon}
+          <span className="material-symbols-rounded">{item.icon}</span>
         </button>
       ))}
+      <div className="ab-spacer" />
+      <button
+        className={`ab-btn ${activeItem === 'settings' ? 'active' : ''}`}
+        onClick={() => handleClick('settings')}
+        title={t('layout.settings')}
+      >
+        <span className="material-symbols-rounded">settings</span>
+      </button>
     </div>
   );
 }
