@@ -43,4 +43,7 @@ coverage/
 .cursor/
 .specify/
 .turbo/
+.superpowers/
+specs/
 docs/superpowers/
+specs/
