@@ -12,6 +12,14 @@
 
 [Features](#features) · [Quick Start](#quick-start) · [Structure](#project-structure) · [Extensions](#extension-development) · [Tech Stack](#tech-stack) · [Principles](#design-principles)
 
+### Demo
+
+<p align="center">
+  <img src="docs/Guide.gif" alt="TerminalMind Demo" />
+</p>
+
+> Type natural language or commands — AI will respond intelligently. Supports local terminal, SSH remote, SFTP transfer, and AI-powered command generation.
+
 ### Features
 
 
@@ -243,6 +251,14 @@ MIT
 **CLI-First 智能终端，面向全栈开发者**
 
 [功能](#功能概览) · [快速开始](#快速开始) · [结构](#项目结构) · [插件开发](#插件开发) · [技术栈](#技术栈) · [设计原则](#设计原则)
+
+### 演示教程
+
+<p align="center">
+  <img src="docs/Guide.gif" alt="TerminalMind 演示" />
+</p>
+
+> 输入自然语言或命令，AI 智能响应。支持本地终端、SSH 远程连接、SFTP 文件传输、AI 命令生成等功能。
 
 ### 功能概览
 
